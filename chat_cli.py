@@ -1,6 +1,9 @@
 import argparse
 import json
 import sys
+import threading
+import time
+import itertools
 import httpx
 
 
@@ -29,13 +32,29 @@ def chat_loop(endpoint: str, threshold: float):
                     "chat_template_kwargs": {"enable_thinking": False}
                 }
 
-                print("AI: ", end="", flush=True)
+                stop_event = threading.Event()
+                def animate():
+                    spinner = itertools.cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
+                    while not stop_event.is_set():
+                        sys.stdout.write(f"\rAI: \033[90mThinking {next(spinner)}\033[0m")
+                        sys.stdout.flush()
+                        time.sleep(0.1)
+                    sys.stdout.write("\r\033[K")
+                    sys.stdout.write("AI: ")
+                    sys.stdout.flush()
+
+                t = threading.Thread(target=animate)
+                t.daemon = True
+                t.start()
 
                 final_tok_per_sec = None
                 ai_content = ""
                 
                 try:
                     with client.stream("POST", endpoint, json=payload) as response:
+                        stop_event.set()
+                        t.join()
+                        
                         if response.status_code != 200:
                             print(f"\n[Error: Proxy returned {response.status_code}]")
                             print(response.read().decode())
@@ -73,7 +92,14 @@ def chat_loop(endpoint: str, threshold: float):
                                 except json.JSONDecodeError:
                                     pass
                 except httpx.ConnectError:
+                    stop_event.set()
+                    t.join()
                     print("\n[Error: Could not connect to the proxy. Is it running on port 8000?]")
+                    break
+                except Exception as e:
+                    stop_event.set()
+                    t.join()
+                    print(f"\n[Error: {e}]")
                     break
                 
                 print() # Newline after response

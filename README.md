@@ -1,4 +1,6 @@
-<h1 align="center">swiftlet</h1>
+<p align="center">
+  <img src="assets/swiftlet-logo.png" width="350" alt="swiftlet — fast local MoE inference">
+</p>
 
 <p align="center">
   <b>An adaptive tuning layer for fast local MoE inference on Apple Silicon.</b><br>
@@ -9,6 +11,12 @@
   <a href="https://github.com/coolsourav100/swiftlet"><b>GitHub</b></a> ·
   <a href="docs/bb-cep-full-framework.md">BB-CEP Framework</a> ·
   <a href="docs/validation.md">Validation</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/status-Experimental-orange" alt="Experimental">
 </p>
 
 **Static configurations don't fit dynamic workloads.** Explore large Mixture-of-Experts (MoE) models on Apple Silicon and unified-memory hardware using a transparent proxy that dynamically shifts computation between your CPU and GPU based on the exact shape of your prompt.
@@ -71,6 +79,20 @@ swiftlet transparently intercepts OpenAI-compatible API traffic, deciding *how* 
 - **Epsilon-Greedy Config Store:** Records real `tok/s` metrics directly from `llama-server` streams. It exploits the best-known hardware config 85% of the time, and explores untested configurations 15% of the time, perpetually optimizing for your exact machine.
 - **Memory-Aware Orchestration:** Operates a bounded `ServerPool`. By default (`max_size=1`), it aggressively evicts old configurations before cold-starting new ones, preventing OOM crashes on 16GB Macs when exploring new MoE splits.
 - **Thread & Inference Tuning:** Bypasses default thread caps to fully saturate performance cores, and natively strips out hidden reasoning overhead (like Qwen3's chain-of-thought) when it jeopardizes your generation token budgets.
+
+### Live Measured Performance (M5 Mac, 16GB)
+
+The following is **real, unfabricated data** recorded directly by `swiftlet` on an M5 Mac testing the `DECODE_HEAVY` phase across different CPU/GPU splits (`--n-cpu-moe`). 
+
+Notice the extremely tight clustering around ~24 tok/s: this confirms that the Apple Silicon unified memory architecture handles mixed CPU/GPU scheduling gracefully, but also indicates a hard memory-bandwidth ceiling across the entire SOC.
+
+```mermaid
+xychart-beta
+    title "Measured DECODE_HEAVY Performance (tok/s) across CPU splits"
+    x-axis "CPU MoE Experts (--n-cpu-moe)" ["0", "4", "8", "12", "16"]
+    y-axis "Tokens / Second" 20 --> 26
+    bar [23.93, 24.05, 24.28, 24.44, 24.09]
+```
 
 ## Open Hypotheses and Experiments
 
