@@ -43,24 +43,39 @@ swiftlet's job: **classify each request by workload shape, look up (or learn) th
 
 Being direct about scope, the same way the BB-CEP document was:
 
-**Implemented and tested (pure Python, no model required to verify logic):**
+**Implemented and working end-to-end with llama-server:**
 - Workload classifier (`swiftlet/classifier.py`)
 - Learned config store with epsilon-greedy exploration (`swiftlet/config_store.py`)
 - Orchestrator's decision logic (`swiftlet/orchestrator.py`) — process pool management and request routing
-
-**Designed, requires a real `llama-server` + model to validate end-to-end:**
-- The actual proxying of inference requests to a running `llama-server` instance
-- Real measured tok/s feeding back into the learned store (currently the store's `record_result()` method is ready to receive this, but it needs a live run against your Qwen3-30B-A3B setup to produce real data — see `docs/validation.md`)
-
-This mirrors the honesty principle from BB-CEP: the orchestration logic is real, tested code; the "does it actually speed things up on real hardware" claim is a validation step you run, not something to assume from the design alone.
+- HTTP Proxying (`swiftlet/cli.py`) — transparently proxies OpenAI-compatible `/v1/chat/completions` traffic, extracting actual `tok/s` measurements directly from `llama-server` streams to feed back into the learned store.
+- Interactive Chat CLI (`chat_cli.py`) — a sample frontend demonstrating streaming responses, performance threshold tracking, and graceful handling of model reasoning.
 
 ## Quick start
 
-```bash
-pip install -r requirements.txt
-pytest tests/ -v          # verify the classifier + config store logic
-python -m swiftlet.cli --model /path/to/Qwen3-30B-A3B-UD-Q4_K_XL.gguf
-```
+1. **Install requirements:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Set up your environment:**
+   Instead of passing long paths every time, you can configure swiftlet using a `.env` file. Copy the example and edit it to match your paths:
+   ```bash
+   cp .env.example .env
+   ```
+   *Note: If you use Ollama on macOS, your `llama-server` binary is usually at `/Applications/Ollama.app/Contents/Resources/llama-server`, and models are stored in `~/.ollama/models/blobs/`.*
+
+3. **Start the swiftlet proxy:**
+   ```bash
+   python -m swiftlet.cli
+   ```
+   *(Alternatively, you can still pass `--model` and `--llama-server` via command line arguments if you prefer).*
+
+4. **Chat with your model:**
+   In a separate terminal, run the chat client:
+   ```bash
+   python chat_cli.py
+   ```
+   As you chat, the proxy will transparently launch `llama-server` instances with different CPU/GPU splits, measure the token generation speed, and learn which hardware configuration is optimal for different types of prompts (e.g., short chats vs. long coding tasks).
 
 ## Credits
 

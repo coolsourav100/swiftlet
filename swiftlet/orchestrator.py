@@ -12,6 +12,8 @@ path and hardware. See docs/validation.md for wiring this to a live run.
 
 from __future__ import annotations
 
+import subprocess
+import threading
 import time
 from dataclasses import dataclass
 
@@ -25,6 +27,7 @@ class ServerHandle:
     config: EngineConfig
     port: int
     started_at: float
+    process: subprocess.Popen | None = None  # set by a real launcher; None for fakes/tests
 
 
 class ServerPool:
@@ -47,6 +50,7 @@ class ServerPool:
         self._pool: dict[str, ServerHandle] = {}
         self._last_used: dict[str, float] = {}
         self._next_port = 8080
+        self._lock = threading.Lock()
 
     @staticmethod
     def _unimplemented_launcher(config: EngineConfig, port: int) -> ServerHandle:
@@ -57,20 +61,54 @@ class ServerPool:
         )
 
     def get_or_launch(self, config: EngineConfig) -> ServerHandle:
-        key = config.key()
-        self._last_used[key] = time.time()
+        """
+        Thread-safe: the whole check-launch-insert sequence holds the lock,
+        so two concurrent requests for the same new config can't both miss
+        the cache and race to launch duplicate servers on the same port.
+        The launcher call itself (which may block for tens of seconds on a
+        cold model load) happens WHILE the lock is held — a deliberate
+        trade-off: a second thread wanting a *different* config will wait
+        rather than race, at the cost of the pool being briefly unusable
+        during any cold start. Acceptable for a single-Mac deployment;
+        would need a per-key lock instead of one global lock to scale further.
+        """
+        with self._lock:
+            key = config.key()
+            self._last_used[key] = time.time()
 
-        if key in self._pool:
-            return self._pool[key]
+            if key in self._pool:
+                return self._pool[key]
 
-        if len(self._pool) >= self.max_size:
-            lru_key = min(self._last_used, key=lambda k: self._last_used[k] if k in self._pool else float("inf"))
-            del self._pool[lru_key]
+            if len(self._pool) >= self.max_size:
+                lru_key = min(
+                    (k for k in self._pool),
+                    key=lambda k: self._last_used.get(k, float("inf")),
+                )
+                self._terminate_handle(self._pool[lru_key])
+                del self._pool[lru_key]
 
-        handle = self._launcher(config, self._next_port)
-        self._next_port += 1
-        self._pool[key] = handle
-        return handle
+            handle = self._launcher(config, self._next_port)
+            self._next_port += 1
+            self._pool[key] = handle
+            return handle
+
+    @staticmethod
+    def _terminate_handle(handle: ServerHandle) -> None:
+        if handle.process is None:
+            return  # fake/test handle, nothing real to terminate
+        handle.process.terminate()
+        try:
+            handle.process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            handle.process.kill()
+            handle.process.wait(timeout=5)
+
+    def shutdown(self) -> None:
+        """Terminate every real llama-server process this pool launched."""
+        with self._lock:
+            for handle in self._pool.values():
+                self._terminate_handle(handle)
+            self._pool.clear()
 
     def active_configs(self) -> list[EngineConfig]:
         return [h.config for h in self._pool.values()]

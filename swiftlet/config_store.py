@@ -55,7 +55,7 @@ def _default_configs_for_phase(phase: Phase) -> list[EngineConfig]:
     if phase == Phase.DECODE_HEAVY:
         return [
             EngineConfig(n_gpu_layers=99, n_cpu_moe=n)
-            for n in (0, 4, 8, 12, 16)
+            for n in (0, 8, 16)
         ]
     return [EngineConfig(n_gpu_layers=99, n_cpu_moe=n) for n in (0, 6, 12)]
 

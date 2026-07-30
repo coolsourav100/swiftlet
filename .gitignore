@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 swiftlet_learned_config.json
 *.gguf
+.env
