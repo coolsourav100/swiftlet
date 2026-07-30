@@ -29,16 +29,9 @@
 > Large models have different bottlenecks depending on what they are doing. A long document Q&A (prefill) is compute-bound and wants GPU dominance. A short chat turn (decode) is memory-bound and benefits from a CPU/GPU split. swiftlet dynamically classifies requests, routes them to optimally tuned `llama-server` instances, and remembers what worked best for next time.
 
 ```bash
-$ python chat_cli.py
-Connecting to swiftlet proxy at http://localhost:8000/v1/chat/completions...
-Performance threshold set to 20.0 tok/s.
-
-You: write a rate limiter function in node js
-[Proxy] Routed 38 prompt / 2048 gen to port 8081 (decision: EXPLORE, config: 99 GPU / 8 CPU)
-  [ready] port 8081 came up after 4s
-AI: Here is a simple sliding window rate limiter...
-  Recorded 24.78 tok/s (>= threshold (FAST))
+$ python -m swiftlet.app
 ```
+*Launch the rich terminal UI to chat with your model and monitor live CPU core utilization.*
 
 ## The Idea: Where swiftlet fits
 
