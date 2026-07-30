@@ -48,13 +48,13 @@ def test_orchestrator_records_and_reroutes_over_time(tmp_path):
     for _ in range(len(candidates)):
         sig, config, handle, exploring = orch.route(prompt_tokens=50, expected_gen_tokens=2000)
         assert exploring is True  # still exploring until all candidates tried
-        measured = 50.0 if config.n_cpu_moe == 12 else 10.0
+        measured = 50.0 if config.n_cpu_moe == 8 else 10.0
         orch.record(sig, config, measured)
 
-    # Now it should have tried everything and exploit the best (n_cpu_moe=12)
+    # Now it should have tried everything and exploit the best (n_cpu_moe=8)
     sig, config, handle, exploring = orch.route(prompt_tokens=55, expected_gen_tokens=2100)
     assert exploring is False
-    assert config.n_cpu_moe == 12
+    assert config.n_cpu_moe == 8
 
 
 def test_unimplemented_launcher_raises_clear_error():
