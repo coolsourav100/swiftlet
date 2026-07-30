@@ -86,9 +86,11 @@ swiftlet transparently intercepts OpenAI-compatible API traffic, deciding *how* 
 
 ### Live Measured Performance (M5 Mac, 16GB)
 
-The following is **real, unfabricated data** recorded directly by `swiftlet` on an M5 Mac testing the `DECODE_HEAVY` phase across different CPU/GPU splits (`--n-cpu-moe`). 
+The following is a **Multi-Dimensional Use-Case Profile** based on real data recorded by `swiftlet` on an Apple M5 Mac (16GB). 
 
-Notice the extremely tight clustering around ~24 tok/s: this confirms that the Apple Silicon unified memory architecture handles mixed CPU/GPU scheduling gracefully, but also indicates a hard memory-bandwidth ceiling across the entire SOC.
+*See our [Performance Evaluation Methodology](docs/research_matrix.md) for full details on how we measure Prefill (TTFT) vs Decode (TPOT) speeds.*
+
+It demonstrates how the absolute best hardware configuration (CPU/GPU split) completely changes depending on the size of your input prompt vs your expected output generation. Swiftlet learns these profiles and automatically routes your requests to the optimal split.
 
 <p align="center">
   <img src="assets/performance_matrix.svg" width="800" alt="Performance Matrix">
@@ -128,17 +130,6 @@ We have built a frictionless, "1-Click" setup process specifically designed so t
    - **The Engine:** One tab runs the background proxy that transparently optimizes your hardware splits.
    - **The Chat UI:** The other tab opens the sleek Swiftlet Chat interface where you can talk to your model!
 
-### 4. VS Code Integration (Optional)
-
-Swiftlet can act as the backend for popular AI coding extensions in VS Code (like **Continue.dev** and **Cline**), replacing expensive cloud APIs with your own dynamically tuned local models.
-
-Instead of manually configuring JSON files, just run our setup script from your terminal:
-
-```bash
-python3 scripts/connect_vscode.py
-```
-
-This script will automatically detect and configure both **Continue.dev** and **Cline** to route through your `http://localhost:8000/v1` proxy. Once it finishes, simply reload your VS Code window and select "Swiftlet Qwen" as your model!
 
 ## Credits & License
 

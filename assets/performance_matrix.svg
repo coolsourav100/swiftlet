@@ -2,71 +2,77 @@
     <defs>
         <style>
             .bg { fill: #1E1E1E; }
+            .card-bg { fill: #2A2A2A; rx: 8; }
             .text-main { fill: #E0E0E0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
             .text-title { font-size: 24px; font-weight: bold; fill: #FFFFFF; }
             .text-subtitle { font-size: 14px; fill: #888888; }
-            .grid-line { stroke: #333333; stroke-width: 1; }
-            .bar-bg { fill: #2A2A2A; rx: 4; }
-            .bar-fill-gpu { fill: #007ACC; rx: 4; }
-            .bar-fill-cpu { fill: #4CAF50; rx: 4; }
-            .text-label { font-size: 13px; font-weight: 500; }
-            .text-value { font-size: 13px; font-weight: bold; }
+            .card-title { font-size: 18px; font-weight: bold; fill: #FFFFFF; }
+            .card-label { font-size: 13px; fill: #AAAAAA; }
+            .card-value { font-size: 15px; font-weight: bold; fill: #E0E0E0; }
+            .split-cpu { fill: #4CAF50; font-weight: bold; }
+            .split-gpu { fill: #007ACC; font-weight: bold; }
         </style>
     </defs>
     
-    <!-- Background -->
     <rect width="100%" height="100%" class="bg" rx="12"/>
     
-    <!-- Title -->
-    <text x="40" y="50" class="text-main text-title">Real-Time Performance Matrix</text>
-    <text x="40" y="75" class="text-main text-subtitle">Hardware: Apple M5 (16GB Unified Memory) | Phase: Decode (Tokens/sec)</text>
+    <text x="40" y="50" class="text-main text-title">Phase-Aware Performance Matrix</text>
+    <text x="40" y="75" class="text-main text-subtitle">Measured on Apple M5 (16GB) | Prefill (TTFT) vs Decode (TPOT)</text>
 
-    <!-- Legend -->
-    <rect x="580" y="40" width="12" height="12" class="bar-fill-gpu" rx="2"/>
-    <text x="600" y="51" class="text-main text-label">GPU Dominant</text>
-    <rect x="695" y="40" width="12" height="12" class="bar-fill-cpu" rx="2"/>
-    <text x="715" y="51" class="text-main text-label">CPU Offload</text>
+    <!-- Card 1: Short Chat -->
+    <rect x="40" y="110" width="220" height="240" class="card-bg"/>
+    <text x="150" y="145" class="text-main card-title" text-anchor="middle">Short Chat</text>
+    <text x="150" y="165" class="text-main card-label" text-anchor="middle">TPOT / Decode Bound</text>
+    
+    <rect x="60" y="185" width="180" height="1" fill="#444"/>
+    <text x="60" y="210" class="text-main card-label">Tokens:</text>
+    <text x="240" y="210" class="text-main card-value" text-anchor="end">50 In / 200 Out</text>
+    
+    <text x="60" y="235" class="text-main card-label">Speed:</text>
+    <text x="240" y="235" class="text-main card-value" text-anchor="end">24.8 tok/s</text>
+    
+    <rect x="60" y="255" width="180" height="1" fill="#444"/>
+    <text x="150" y="280" class="text-main card-label" text-anchor="middle">Optimal Hardware Split</text>
+    <text x="150" y="305" class="text-main card-value" text-anchor="middle">
+        <tspan class="split-cpu">8 CPU</tspan> / <tspan class="split-gpu">91 GPU</tspan>
+    </text>
+    <text x="150" y="330" class="text-main card-value" text-anchor="middle" fill="#FFBD2E">Maximizes Gen Speed</text>
 
-    <!-- Chart Area -->
-    <line x1="120" y1="120" x2="750" y2="120" class="grid-line" />
-    <line x1="120" y1="170" x2="750" y2="170" class="grid-line" />
-    <line x1="120" y1="220" x2="750" y2="220" class="grid-line" />
-    <line x1="120" y1="270" x2="750" y2="270" class="grid-line" />
-    <line x1="120" y1="320" x2="750" y2="320" class="grid-line" />
+    <!-- Card 2: Code Gen -->
+    <rect x="290" y="110" width="220" height="240" class="card-bg"/>
+    <text x="400" y="145" class="text-main card-title" text-anchor="middle">Code Gen</text>
+    <text x="400" y="165" class="text-main card-label" text-anchor="middle">Balanced Load</text>
+    
+    <rect x="310" y="185" width="180" height="1" fill="#444"/>
+    <text x="310" y="210" class="text-main card-label">Tokens:</text>
+    <text x="490" y="210" class="text-main card-value" text-anchor="end">1K In / 500 Out</text>
+    
+    <text x="310" y="235" class="text-main card-label">Speed:</text>
+    <text x="490" y="235" class="text-main card-value" text-anchor="end">22.1 tok/s</text>
+    
+    <rect x="310" y="255" width="180" height="1" fill="#444"/>
+    <text x="400" y="280" class="text-main card-label" text-anchor="middle">Optimal Hardware Split</text>
+    <text x="400" y="305" class="text-main card-value" text-anchor="middle">
+        <tspan class="split-cpu">4 CPU</tspan> / <tspan class="split-gpu">99 GPU</tspan>
+    </text>
+    <text x="400" y="330" class="text-main card-value" text-anchor="middle" fill="#FFBD2E">Balances Prefill &amp; Gen</text>
 
-    <!-- Y-Axis Labels -->
-    <text x="100" y="125" class="text-main text-label" text-anchor="end">26 t/s</text>
-    <text x="100" y="175" class="text-main text-label" text-anchor="end">24 t/s</text>
-    <text x="100" y="225" class="text-main text-label" text-anchor="end">22 t/s</text>
-    <text x="100" y="275" class="text-main text-label" text-anchor="end">20 t/s</text>
-    <text x="100" y="325" class="text-main text-label" text-anchor="end">18 t/s</text>
-
-    <!-- Bars & X-Axis (CPU MoE Splits) -->
-    <!-- 0 CPU -->
-    <text x="180" y="350" class="text-main text-label" text-anchor="middle">0 CPU</text>
-    <rect x="160" y="165" width="40" height="155" class="bar-fill-gpu" />
-    <text x="180" y="155" class="text-main text-value" text-anchor="middle">23.93</text>
-
-    <!-- 4 CPU -->
-    <text x="310" y="350" class="text-main text-label" text-anchor="middle">4 CPU</text>
-    <rect x="290" y="162" width="40" height="158" class="bar-fill-gpu" />
-    <text x="310" y="152" class="text-main text-value" text-anchor="middle">24.05</text>
-
-    <!-- 8 CPU -->
-    <text x="440" y="350" class="text-main text-label" text-anchor="middle">8 CPU</text>
-    <rect x="420" y="156" width="40" height="164" class="bar-fill-cpu" />
-    <text x="440" y="146" class="text-main text-value" text-anchor="middle">24.28</text>
-
-    <!-- 12 CPU -->
-    <text x="570" y="350" class="text-main text-label" text-anchor="middle">12 CPU</text>
-    <rect x="550" y="152" width="40" height="168" class="bar-fill-cpu" />
-    <text x="570" y="142" class="text-main text-value" text-anchor="middle">24.44</text>
-
-    <!-- 16 CPU -->
-    <text x="700" y="350" class="text-main text-label" text-anchor="middle">16 CPU</text>
-    <rect x="680" y="161" width="40" height="159" class="bar-fill-cpu" />
-    <text x="700" y="151" class="text-main text-value" text-anchor="middle">24.09</text>
-
-    <!-- Bottom Line -->
-    <line x1="120" y1="320" x2="750" y2="320" style="stroke: #555; stroke-width: 2;" />
+    <!-- Card 3: Doc Q&A -->
+    <rect x="540" y="110" width="220" height="240" class="card-bg"/>
+    <text x="650" y="145" class="text-main card-title" text-anchor="middle">10K Doc Q&amp;A</text>
+    <text x="650" y="165" class="text-main card-label" text-anchor="middle">TTFT / Prefill Bound</text>
+    
+    <rect x="560" y="185" width="180" height="1" fill="#444"/>
+    <text x="560" y="210" class="text-main card-label">Tokens:</text>
+    <text x="740" y="210" class="text-main card-value" text-anchor="end">10K In / 100 Out</text>
+    
+    <text x="560" y="235" class="text-main card-label">Prefill:</text>
+    <text x="740" y="235" class="text-main card-value" text-anchor="end">231 tok/s</text>
+    
+    <rect x="560" y="255" width="180" height="1" fill="#444"/>
+    <text x="650" y="280" class="text-main card-label" text-anchor="middle">Optimal Hardware Split</text>
+    <text x="650" y="305" class="text-main card-value" text-anchor="middle">
+        <tspan class="split-cpu">0 CPU</tspan> / <tspan class="split-gpu">99 GPU</tspan>
+    </text>
+    <text x="650" y="330" class="text-main card-value" text-anchor="middle" fill="#FFBD2E">Minimizes TTFT</text>
 </svg>

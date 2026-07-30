@@ -1,105 +1,111 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="100%" height="100%">
     <defs>
         <style>
-            .bg { fill: #1E1E1E; }
-            .mac-bar { fill: #333333; }
+            .bg { fill: #000000; }
+            .mac-bar { fill: #1E1E1E; }
             .mac-btn-red { fill: #FF5F56; }
             .mac-btn-yellow { fill: #FFBD2E; }
             .mac-btn-green { fill: #27C93F; }
-            .text { font-family: "Menlo", "Monaco", "Courier New", monospace; font-size: 14px; fill: #E0E0E0; }
-            .prompt { fill: #007ACC; font-weight: bold; }
-            .ai { fill: #4CAF50; font-weight: bold; }
+            .sidebar { fill: #111111; stroke: #333333; stroke-width: 1; }
+            .text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
             
             /* Animations */
+            @keyframes load_dots {
+                0% { content: "."; } 12% { content: ".."; } 25% { content: "..."; }
+                37% { content: "...."; } 50% { content: "....."; } 62% { content: "......"; }
+                75% { content: "......."; } 87% { content: "........"; } 100% { content: "........."; }
+            }
             @keyframes type {
-                from { width: 0; }
-                to { width: 300px; }
+                from { width: 0; } to { width: 350px; }
             }
-            @keyframes blink {
-                50% { opacity: 0; }
-            }
-            @keyframes appear {
-                0% { opacity: 0; }
-                100% { opacity: 1; }
-            }
-            @keyframes loading {
-                0% { content: "."; }
-                25% { content: ".."; }
-                50% { content: "..."; }
-                75% { content: "...."; }
-                100% { content: "....."; }
-            }
-            
-            .typing-container {
-                display: inline-block;
-                overflow: hidden;
-                white-space: nowrap;
-                animation: type 2s steps(40, end);
-            }
-            .cursor {
-                display: inline-block;
-                width: 8px;
-                height: 15px;
-                background-color: #E0E0E0;
-                animation: blink 1s step-end infinite;
-                vertical-align: text-bottom;
-            }
-            .response {
-                opacity: 0;
-                animation: appear 0.1s linear forwards;
-                animation-delay: 2.5s;
-            }
-            .response-text {
-                opacity: 0;
-                animation: appear 0.1s linear forwards;
-                animation-delay: 4.5s;
-            }
-            .loading-dots::after {
-                content: "";
-                animation: loading 2s infinite;
+            @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes disappear { to { opacity: 0; display: none; } }
+            @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+            .typing {
+                display: inline-block; overflow: hidden; white-space: nowrap;
+                animation: type 2s steps(40, end); fill: #E0E0E0; font-size: 14px;
             }
             .loading-container {
-                opacity: 0;
-                animation: appear 0.1s linear forwards, disappear 0.1s linear forwards 4.5s;
-                animation-delay: 2.5s;
+                opacity: 0; animation: appear 0.1s forwards, disappear 0.1s forwards 4.5s; animation-delay: 2s;
             }
-            @keyframes disappear {
-                to { opacity: 0; display: none; }
+            .loading-dots::after {
+                content: ""; animation: load_dots 1s infinite; fill: #4CAF50;
             }
+            .response-container {
+                opacity: 0; animation: appear 0.1s forwards; animation-delay: 4.5s;
+            }
+            .bar-green { fill: #27C93F; animation: flash 2s infinite; }
+            .bar-yellow { fill: #FFBD2E; animation: flash 2s infinite reverse; }
         </style>
     </defs>
     
     <!-- Window -->
     <rect width="100%" height="100%" class="bg" rx="8"/>
-    
-    <!-- Mac Title Bar -->
     <rect width="100%" height="24" class="mac-bar" rx="8" />
     <rect x="0" y="12" width="100%" height="12" class="mac-bar" />
     <circle cx="20" cy="12" r="6" class="mac-btn-red" />
     <circle cx="40" cy="12" r="6" class="mac-btn-yellow" />
     <circle cx="60" cy="12" r="6" class="mac-btn-green" />
     
-    <!-- Terminal Content -->
-    <foreignObject x="20" y="40" width="760" height="240">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 14px; color: #E0E0E0;">
-            <div>
-                <span style="color: #007ACC; font-weight: bold;">You: </span>
-                <span class="typing-container">write a rate limiter function in node js</span>
-                <span class="cursor"></span>
+    <!-- Sidebar (CPU Cores) -->
+    <rect x="0" y="24" width="200" height="376" class="sidebar"/>
+    <text x="20" y="55" fill="#AAAAAA" font-size="12" font-weight="bold" class="text">DASHBOARD</text>
+    
+    <!-- CPU Bars -->
+    <text x="20" y="90" fill="#E0E0E0" font-size="12" class="text">Core 0 (E)</text>
+    <rect x="90" y="82" width="80" height="8" class="bar-green" rx="4"/>
+    
+    <text x="20" y="115" fill="#E0E0E0" font-size="12" class="text">Core 1 (E)</text>
+    <rect x="90" y="107" width="40" height="8" class="bar-green" rx="4"/>
+    
+    <text x="20" y="140" fill="#E0E0E0" font-size="12" class="text">Core 2 (E)</text>
+    <rect x="90" y="132" width="60" height="8" class="bar-green" rx="4"/>
+    
+    <text x="20" y="165" fill="#E0E0E0" font-size="12" class="text">Core 3 (E)</text>
+    <rect x="90" y="157" width="50" height="8" class="bar-green" rx="4"/>
+
+    <text x="20" y="195" fill="#E0E0E0" font-size="12" class="text">Core 4 (P)</text>
+    <rect x="90" y="187" width="90" height="8" class="bar-yellow" rx="4"/>
+    
+    <text x="20" y="220" fill="#E0E0E0" font-size="12" class="text">Core 5 (P)</text>
+    <rect x="90" y="212" width="85" height="8" class="bar-yellow" rx="4"/>
+    
+    <text x="20" y="245" fill="#E0E0E0" font-size="12" class="text">Core 6 (P)</text>
+    <rect x="90" y="237" width="95" height="8" class="bar-yellow" rx="4"/>
+
+    <text x="20" y="270" fill="#E0E0E0" font-size="12" class="text">Core 7 (P)</text>
+    <rect x="90" y="262" width="88" height="8" class="bar-yellow" rx="4"/>
+    
+    <!-- Proxy Metric -->
+    <text x="20" y="320" fill="#AAAAAA" font-size="12" font-weight="bold" class="text">PROXY ENGINE</text>
+    <text x="20" y="345" fill="#27C93F" font-size="14" font-weight="bold" class="text">24.78 tok/s</text>
+    <text x="20" y="365" fill="#AAAAAA" font-size="12" class="text">Mode: EXPLORE (8 CPU)</text>
+
+    <!-- Main Chat UI -->
+    <foreignObject x="220" y="40" width="660" height="340">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; font-size: 15px; color: #E0E0E0; padding: 10px;">
+            <div style="background-color: #222; padding: 12px; border-radius: 8px; border: 1px solid #333; margin-bottom: 20px;">
+                <span style="color: #007ACC; font-weight: bold;">User</span><br/><br/>
+                <span class="typing">Write a fast sliding window rate limiter in Node.js</span>
             </div>
             
-            <div style="margin-top: 15px; position: relative;">
-                <div class="loading-container" style="position: absolute; top: 0;">
-                    <span style="color: #4CAF50; font-weight: bold;">Swiftlet: </span>
-                    <span class="loading-dots"></span>
+            <div style="position: relative;">
+                <!-- Loading State -->
+                <div class="loading-container" style="position: absolute; top: 0; background-color: #111; padding: 12px; border-radius: 8px; border: 1px solid #333; width: 620px;">
+                    <span style="color: #4CAF50; font-weight: bold;">Swiftlet</span>
+                    <span class="loading-dots" style="color: #4CAF50; font-weight: bold;"></span>
                 </div>
                 
-                <div class="response-text" style="position: absolute; top: 0;">
-                    <span style="color: #4CAF50; font-weight: bold;">Swiftlet: </span>
-                    <br/><br/>
-                    Here is a simple sliding window rate limiter in Node.js...<br/>
+                <!-- Resolved Response State -->
+                <div class="response-container" style="position: absolute; top: 0; background-color: #111; padding: 12px; border-radius: 8px; border: 1px solid #333; width: 620px;">
+                    <span style="color: #4CAF50; font-weight: bold;">Swiftlet</span><br/>
+                    <div style="margin-top: 10px; margin-bottom: 10px; padding: 8px; background-color: #1A1A1A; border-left: 2px solid #555; cursor: pointer; color: #888; font-size: 13px;">
+                        ▶ Thinking
+                    </div>
+                    Here is a highly optimized sliding window rate limiter using Redis for the backend...<br/>
                     <br/>
-                    <span style="color: #888888; font-size: 12px;"><i>[Proxy] Recorded 24.44 tok/s (Decision: EXPLORE, CPU: 12)</i></span>
+                    <span style="color: #555; font-size: 12px;"><i>[Proxy] Recorded 24.78 tok/s (Decision: EXPLORE, CPU: 8)</i></span>
                 </div>
             </div>
         </div>
