@@ -188,9 +188,4 @@ Either outcome is a legitimate, reportable result — the value of doing this va
 
 - This is a **single-node, single-SoC inference framework** — it does not address multi-machine clusters, NUMA (irrelevant on Apple Silicon by design), or training-time gradient synchronization.
 - The partitioning algorithm assumes bandwidth contention is roughly additive and boundable by a single `B_total_effective` figure — real memory controllers may show non-linear contention behavior under load, which Section 7.1's concurrent-contended benchmark is specifically designed to catch rather than assume away.
-- Section 5's speedup ceiling is a **prediction to test**, not a guarantee. Report the measured number, not the predicted one, once you've run Section 7.
 
----
-
-## 9. Suggested next artifact
-Once Section 7 has been run once, the natural output is a short results write-up: theoretical ceiling vs. measured speedup, the winning `n-cpu-moe` value for Qwen3-30B-A3B specifically, and one paragraph on which of the "what success looks like" outcomes (Section 7.3) actually occurred. That result — not this framework document alone — is what belongs in the Jarvis README and in an interview answer.
