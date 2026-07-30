@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="100%" height="100%">
+    <defs>
+        <style>
+            .bg { fill: #1E1E1E; }
+            .mac-bar { fill: #333333; }
+            .mac-btn-red { fill: #FF5F56; }
+            .mac-btn-yellow { fill: #FFBD2E; }
+            .mac-btn-green { fill: #27C93F; }
+            .text { font-family: "Menlo", "Monaco", "Courier New", monospace; font-size: 14px; fill: #E0E0E0; }
+            .prompt { fill: #007ACC; font-weight: bold; }
+            .ai { fill: #4CAF50; font-weight: bold; }
+            
+            /* Animations */
+            @keyframes type {
+                from { width: 0; }
+                to { width: 300px; }
+            }
+            @keyframes blink {
+                50% { opacity: 0; }
+            }
+            @keyframes appear {
+                0% { opacity: 0; }
+                100% { opacity: 1; }
+            }
+            @keyframes loading {
+                0% { content: "."; }
+                25% { content: ".."; }
+                50% { content: "..."; }
+                75% { content: "...."; }
+                100% { content: "....."; }
+            }
+            
+            .typing-container {
+                display: inline-block;
+                overflow: hidden;
+                white-space: nowrap;
+                animation: type 2s steps(40, end);
+            }
+            .cursor {
+                display: inline-block;
+                width: 8px;
+                height: 15px;
+                background-color: #E0E0E0;
+                animation: blink 1s step-end infinite;
+                vertical-align: text-bottom;
+            }
+            .response {
+                opacity: 0;
+                animation: appear 0.1s linear forwards;
+                animation-delay: 2.5s;
+            }
+            .response-text {
+                opacity: 0;
+                animation: appear 0.1s linear forwards;
+                animation-delay: 4.5s;
+            }
+            .loading-dots::after {
+                content: "";
+                animation: loading 2s infinite;
+            }
+            .loading-container {
+                opacity: 0;
+                animation: appear 0.1s linear forwards, disappear 0.1s linear forwards 4.5s;
+                animation-delay: 2.5s;
+            }
+            @keyframes disappear {
+                to { opacity: 0; display: none; }
+            }
+        </style>
+    </defs>
+    
+    <!-- Window -->
+    <rect width="100%" height="100%" class="bg" rx="8"/>
+    
+    <!-- Mac Title Bar -->
+    <rect width="100%" height="24" class="mac-bar" rx="8" />
+    <rect x="0" y="12" width="100%" height="12" class="mac-bar" />
+    <circle cx="20" cy="12" r="6" class="mac-btn-red" />
+    <circle cx="40" cy="12" r="6" class="mac-btn-yellow" />
+    <circle cx="60" cy="12" r="6" class="mac-btn-green" />
+    
+    <!-- Terminal Content -->
+    <foreignObject x="20" y="40" width="760" height="240">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 14px; color: #E0E0E0;">
+            <div>
+                <span style="color: #007ACC; font-weight: bold;">You: </span>
+                <span class="typing-container">write a rate limiter function in node js</span>
+                <span class="cursor"></span>
+            </div>
+            
+            <div style="margin-top: 15px; position: relative;">
+                <div class="loading-container" style="position: absolute; top: 0;">
+                    <span style="color: #4CAF50; font-weight: bold;">Swiftlet: </span>
+                    <span class="loading-dots"></span>
+                </div>
+                
+                <div class="response-text" style="position: absolute; top: 0;">
+                    <span style="color: #4CAF50; font-weight: bold;">Swiftlet: </span>
+                    <br/><br/>
+                    Here is a simple sliding window rate limiter in Node.js...<br/>
+                    <br/>
+                    <span style="color: #888888; font-size: 12px;"><i>[Proxy] Recorded 24.44 tok/s (Decision: EXPLORE, CPU: 12)</i></span>
+                </div>
+            </div>
+        </div>
+    </foreignObject>
+</svg>

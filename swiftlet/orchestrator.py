@@ -12,6 +12,8 @@ path and hardware. See docs/validation.md for wiring this to a live run.
 
 from __future__ import annotations
 
+import httpx
+import socket
 import subprocess
 import threading
 import time
@@ -49,7 +51,7 @@ class ServerPool:
         self._launcher = launcher or self._unimplemented_launcher
         self._pool: dict[str, ServerHandle] = {}
         self._last_used: dict[str, float] = {}
-        self._next_port = 8080
+        self._next_port = 8181
         self._lock = threading.Lock()
 
     @staticmethod
@@ -77,7 +79,13 @@ class ServerPool:
             self._last_used[key] = time.time()
 
             if key in self._pool:
-                return self._pool[key]
+                handle = self._pool[key]
+                if handle.process is None or handle.process.poll() is None:
+                    return handle
+                else:
+                    # Dead process! Remove it to allow a clean restart.
+                    print(f"Orchestrator: Server for {key} died unexpectedly, restarting.")
+                    del self._pool[key]
 
             if len(self._pool) >= self.max_size:
                 lru_key = min(
@@ -87,6 +95,13 @@ class ServerPool:
                 self._terminate_handle(self._pool[lru_key])
                 del self._pool[lru_key]
 
+            # Find a genuinely free port to avoid startup collisions with zombies
+            while True:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    if s.connect_ex(('127.0.0.1', self._next_port)) != 0:
+                        break
+                self._next_port += 1
+                
             handle = self._launcher(config, self._next_port)
             self._next_port += 1
             self._pool[key] = handle
@@ -113,6 +128,10 @@ class ServerPool:
     def active_configs(self) -> list[EngineConfig]:
         return [h.config for h in self._pool.values()]
 
+    def snapshot_handles(self) -> list[ServerHandle]:
+        with self._lock:
+            return list(self._pool.values())
+
 
 class Orchestrator:
     """
@@ -133,3 +152,38 @@ class Orchestrator:
 
     def record(self, signature: WorkloadSignature, config: EngineConfig, tok_per_sec: float) -> None:
         self.store.record_result(signature, config, tok_per_sec)
+
+    def enforce_memory_limit(self, threshold: float = 85.0) -> None:
+        import psutil
+        mem = psutil.virtual_memory()
+        if mem.percent <= threshold:
+            return
+            
+        print(f"\n[Memory Engine] RAM usage at {mem.percent}% (exceeds {threshold}%).")
+        print("[Memory Engine] Erasing idle slots to free KV cache RAM...")
+        
+        handles = self.pool.snapshot_handles()
+        freed_slots = 0
+        
+        for handle in handles:
+            if handle.process is None or handle.process.poll() is not None:
+                continue
+                
+            try:
+                # Query all slots for this server
+                res = httpx.get(f"http://127.0.0.1:{handle.port}/slots", timeout=2.0)
+                if res.status_code != 200:
+                    continue
+                    
+                slots = res.json()
+                for slot in slots:
+                    if not slot.get("is_processing", False):
+                        # Slot is idle, wipe its KV cache from memory
+                        slot_id = slot.get("id")
+                        if slot_id is not None:
+                            httpx.post(f"http://127.0.0.1:{handle.port}/slots/{slot_id}?action=erase", timeout=2.0)
+                            freed_slots += 1
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RequestError):
+                continue
+                
+        print(f"[Memory Engine] Erased {freed_slots} idle slots. Cleanup complete.")

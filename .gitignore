@@ -1,6 +1,22 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-swiftlet_learned_config.json
-*.gguf
+.venv/
+
+# Environment & Config
 .env
+swiftlet_learned_config.json
+
+# Logs & Caches
+*.log
+swiftlet_proxy.log
+.swiftlet_cache/
+
+# OS & IDE
+.DS_Store
+.agents/
+.vscode/
+.idea/
+
+# Large binaries
+*.gguf

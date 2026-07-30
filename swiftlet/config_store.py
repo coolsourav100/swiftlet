@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import random
 import time
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 from pathlib import Path
 
 from .classifier import WorkloadSignature, Phase

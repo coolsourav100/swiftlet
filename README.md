@@ -14,6 +14,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/demo.svg" width="600" alt="Swiftlet Animated Demo">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/status-Experimental-orange" alt="Experimental">
@@ -86,13 +90,9 @@ The following is **real, unfabricated data** recorded directly by `swiftlet` on 
 
 Notice the extremely tight clustering around ~24 tok/s: this confirms that the Apple Silicon unified memory architecture handles mixed CPU/GPU scheduling gracefully, but also indicates a hard memory-bandwidth ceiling across the entire SOC.
 
-```mermaid
-xychart-beta
-    title "Measured DECODE_HEAVY Performance (tok/s) across CPU splits"
-    x-axis "CPU MoE Experts (--n-cpu-moe)" ["0", "4", "8", "12", "16"]
-    y-axis "Tokens / Second" 20 --> 26
-    bar [23.93, 24.05, 24.28, 24.44, 24.09]
-```
+<p align="center">
+  <img src="assets/performance_matrix.svg" width="800" alt="Performance Matrix">
+</p>
 
 ## Open Hypotheses and Experiments
 
@@ -105,50 +105,40 @@ swiftlet treats every optimization as a hypothesis until an end-to-end A/B test 
 | Qwen3 reasoning limits generation budget | Confirmed: 512 token limits truncate code generation | Measure `tok/s` overhead of `reasoning_content` vs pure generation |
 | Fast eviction is better than multi-residence | Confirmed: `max_size=3` causes OOM on 16GB during exploration | Test `max_size=3` on 64GB+ Mac Studios to measure cold-start latency drops |
 
-## Getting Started
+## Getting Started (For Mac Users)
 
-You need **Python 3**, **llama.cpp** (`llama-server`), and a **GGUF MoE Model**.
+We have built a frictionless, "1-Click" setup process specifically designed so that **anyone** can run this locally without needing to configure complex CLI arguments or terminal windows.
 
-### 1. Installation
+### 1. Download Swiftlet
+1. Download this repository (either `git clone` or Download ZIP and extract it).
+2. Open the `swiftlet` folder in your Mac's Finder.
 
-```bash
-git clone https://github.com/coolsourav100/swiftlet.git
-cd swiftlet
-pip install -r requirements.txt
-```
+### 2. Run the 1-Click Installer
+1. Double-click the `install.command` file. 
+   *(Note: If macOS says "unidentified developer", right-click it, select **Open**, and click Open again).*
+2. A terminal window will appear. It will automatically:
+   - Check if you have [Ollama](https://ollama.com/) installed (and prompt you if not).
+   - Find your downloaded AI models.
+   - Install all required Python dependencies securely in a virtual environment.
+   - Automatically configure your `.env` file perfectly for your Mac.
 
-### 2. Configuration
+### 3. Launch the App
+1. Once installation is complete, double-click the `start.command` file.
+2. It will automatically open two terminal tabs:
+   - **The Engine:** One tab runs the background proxy that transparently optimizes your hardware splits.
+   - **The Chat UI:** The other tab opens the sleek Swiftlet Chat interface where you can talk to your model!
 
-Copy the example environment file and configure your paths. You won't need to pass long CLI arguments ever again.
+### 4. VS Code Integration (Optional)
 
-```bash
-cp .env.example .env
-```
+Swiftlet can act as the backend for popular AI coding extensions in VS Code (like **Continue.dev** and **Cline**), replacing expensive cloud APIs with your own dynamically tuned local models.
 
-Edit `.env` to point to your model and `llama-server` binary:
-```env
-MODEL_PATH=/Users/you/.ollama/models/blobs/sha256-...
-LLAMA_SERVER_PATH=/Applications/Ollama.app/Contents/Resources/llama-server
-STARTUP_TIMEOUT=300
-POOL_SIZE=1
-THREADS=8
-```
-
-### 3. Run the Proxy
-
-Start swiftlet. It will bind to `http://localhost:8000` and act as a drop-in replacement for any OpenAI-compatible client.
+Instead of manually configuring JSON files, just run our setup script from your terminal:
 
 ```bash
-python -m swiftlet.cli
+python3 scripts/connect_vscode.py
 ```
 
-### 4. Chat and Learn
-
-In a separate terminal, launch the interactive chat client. As you chat, the proxy will cold-start the engine when necessary, measure the speeds, and permanently memorize the best hardware splits for your Mac.
-
-```bash
-python chat_cli.py
-```
+This script will automatically detect and configure both **Continue.dev** and **Cline** to route through your `http://localhost:8000/v1` proxy. Once it finishes, simply reload your VS Code window and select "Swiftlet Qwen" as your model!
 
 ## Credits & License
 

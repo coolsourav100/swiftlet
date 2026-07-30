@@ -58,8 +58,48 @@ def demo(store_path: str):
     print(f"\nLearned store saved to: {store_path}")
 
 
-def make_proxy_handler(orch: Orchestrator):
+def make_proxy_handler(orch: Orchestrator, ctx_size: int = 8192):
     class ProxyHandler(BaseHTTPRequestHandler):
+        def _count_tokens(self, body: dict) -> int:
+            """
+            Accurate token count via /tokenize on any running server.
+            Falls back to a conservative heuristic if no server is up yet.
+            """
+            prompt = body.get("prompt", body.get("messages", ""))
+
+            if isinstance(prompt, list):
+                parts = []
+                for msg in prompt:
+                    if isinstance(msg, dict):
+                        parts.append(msg.get("content", str(msg)))
+                    else:
+                        parts.append(str(msg))
+                text = "\n".join(parts)
+                template_overhead = len(prompt) * 5
+            else:
+                text = str(prompt)
+                template_overhead = 0
+
+            with orch.pool._lock:
+                handles = list(orch.pool._pool.values())
+
+            for handle in handles:
+                try:
+                    resp = httpx.post(
+                        f"http://127.0.0.1:{handle.port}/tokenize",
+                        json={"content": text},
+                        timeout=10.0,
+                    )
+                    if resp.status_code == 200:
+                        return len(resp.json().get("tokens", [])) + template_overhead
+                except Exception:
+                    continue
+
+            if isinstance(prompt, list):
+                return sum(len(str(p)) // 3 for p in prompt) + template_overhead
+            else:
+                return len(str(prompt)) // 3
+
         def do_POST(self):
             content_length = int(self.headers.get("Content-Length", 0))
             post_data = self.rfile.read(content_length)
@@ -72,21 +112,28 @@ def make_proxy_handler(orch: Orchestrator):
                 self.wfile.write(b"Invalid JSON")
                 return
 
-            # NOTE: character-count/4 is a rough heuristic, not a real token
-            # count. Since bucket boundaries in classifier.py are exact
-            # integers (256, 2048), a systematically-off estimate can
-            # misclassify requests that sit near a boundary. The natural
-            # accuracy improvement is calling llama-server's own /tokenize
-            # endpoint instead — left as a heuristic for now, flagged rather
-            # than silently accepted as "good enough."
-            prompt = body.get("prompt", body.get("messages", ""))
-            if isinstance(prompt, list):
-                prompt_tokens = sum(len(str(p)) // 4 for p in prompt)
-            else:
-                prompt_tokens = len(str(prompt)) // 4
+            prompt_tokens = self._count_tokens(body)
 
             expected_gen_tokens = body.get("n_predict", body.get("max_tokens", 128))
             is_stream = bool(body.get("stream", False))
+
+            if prompt_tokens >= ctx_size:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                error_body = json.dumps({
+                    "error": (
+                        f"Prompt has {prompt_tokens} tokens but context size is "
+                        f"{ctx_size}. Restart swiftlet with --ctx-size "
+                        f"{min(prompt_tokens + 256, 32768)} (or larger)."
+                    )
+                }).encode()
+                self.wfile.write(error_body)
+                print(
+                    f"  [reject] prompt ({prompt_tokens} tokens) exceeds "
+                    f"ctx_size ({ctx_size}) — tell user to increase --ctx-size"
+                )
+                return
 
             try:
                 sig, config, handle, exploring = orch.route(prompt_tokens, expected_gen_tokens)
@@ -105,9 +152,9 @@ def make_proxy_handler(orch: Orchestrator):
 
                 with httpx.Client(timeout=None) as client:
                     if is_stream:
-                        self._proxy_stream(client, target_url, post_data, headers, orch, sig, config)
+                        self._proxy_stream(client, target_url, post_data, headers, orch, sig, config, prompt_tokens)
                     else:
-                        self._proxy_once(client, target_url, post_data, headers, orch, sig, config)
+                        self._proxy_once(client, target_url, post_data, headers, orch, sig, config, prompt_tokens)
 
             except BrokenPipeError:
                 print("Proxy warning: client disconnected mid-stream (BrokenPipe).")
@@ -120,13 +167,16 @@ def make_proxy_handler(orch: Orchestrator):
                 except Exception:
                     pass
 
-        def _proxy_stream(self, client, target_url, post_data, headers, orch, sig, config):
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.end_headers()
-
+        def _proxy_stream(self, client, target_url, post_data, headers, orch, sig, config, prompt_tokens):
             final_tok_per_sec = None
             with client.stream("POST", target_url, content=post_data, headers=headers) as response:
+                self.send_response(response.status_code)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("X-Swiftlet-GPU-Layers", str(config.n_gpu_layers))
+                self.send_header("X-Swiftlet-CPU-MoE", str(config.n_cpu_moe))
+                self.send_header("X-Swiftlet-Prompt-Tokens", str(prompt_tokens))
+                self.end_headers()
+
                 # iter_lines() buffers internally and only yields complete
                 # lines, so a JSON payload split across two TCP reads still
                 # parses correctly — iter_raw() does NOT guarantee that, and
@@ -153,13 +203,19 @@ def make_proxy_handler(orch: Orchestrator):
                 print(f"  Recorded {final_tok_per_sec:.2f} tok/s")
             else:
                 print("  Warning: could not parse timings from stream.")
+            
+            # Post-response memory check event loop
+            orch.enforce_memory_limit(threshold=85.0)
 
-        def _proxy_once(self, client, target_url, post_data, headers, orch, sig, config):
+        def _proxy_once(self, client, target_url, post_data, headers, orch, sig, config, prompt_tokens):
             response = client.post(target_url, content=post_data, headers=headers)
             self.send_response(response.status_code)
             for k, v in response.headers.items():
                 if k.lower() not in ("content-encoding", "content-length", "transfer-encoding"):
                     self.send_header(k, v)
+            self.send_header("X-Swiftlet-GPU-Layers", str(config.n_gpu_layers))
+            self.send_header("X-Swiftlet-CPU-MoE", str(config.n_cpu_moe))
+            self.send_header("X-Swiftlet-Prompt-Tokens", str(prompt_tokens))
             self.end_headers()
             self.wfile.write(response.content)
 
@@ -172,14 +228,45 @@ def make_proxy_handler(orch: Orchestrator):
                     print(f"  Recorded {tok_per_sec:.2f} tok/s")
             except Exception:
                 print("  Warning: could not parse timings from response.")
+                
+            # Post-response memory check event loop
+            orch.enforce_memory_limit(threshold=85.0)
 
         def log_message(self, format, *args):
             pass  # suppress BaseHTTPRequestHandler's default request logging; our own prints cover it
 
     return ProxyHandler
 
+import psutil
 
-def serve(model_path: str, store_path: str, llama_server_bin: str, startup_timeout: int = 300, pool_size: int = 1, threads: int = 8):
+def hunt_zombies(cache_dir: str):
+    """
+    Finds and kills any orphaned llama-server processes from previous crashed sessions
+    that share our specific cache directory, freeing up GPU VRAM.
+    """
+    killed_count = 0
+    for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            name = p.info.get('name', '')
+            cmdline = p.info.get('cmdline', [])
+            if name and 'llama-server' in name and cmdline:
+                # Only kill it if it is using our specific cache directory
+                if '--slot-save-path' in cmdline and cache_dir in cmdline:
+                    p.kill()
+                    killed_count += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+            
+    if killed_count > 0:
+        print(f"  [zombie hunter] 🔫 Terminated {killed_count} orphaned llama-server process(es). VRAM cleared.")
+
+def serve(model_path: str, store_path: str, llama_server_bin: str, startup_timeout: int = 300, pool_size: int = 1, threads: int = 8, ctx_size: int = 8192):
+    cache_dir = os.path.join(os.getcwd(), ".swiftlet_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Hunt and kill orphaned processes from prior crashed runs before allocating new servers
+    hunt_zombies(cache_dir)
+    
     store = LearnedConfigStore(store_path, seed=42)
 
     def real_launcher(config, port) -> ServerHandle:
@@ -195,6 +282,11 @@ def serve(model_path: str, store_path: str, llama_server_bin: str, startup_timeo
             "--n-cpu-moe", str(config.n_cpu_moe),
             "--batch-size", str(config.batch_size),
             "--threads", str(threads),
+            "-np", "1",
+            "-c", str(ctx_size),
+            "--cache-type-k", "q8_0",
+            "--cache-type-v", "q8_0",
+            "--slot-save-path", cache_dir,
             "--port", str(port),
         ])
 
@@ -239,7 +331,7 @@ def serve(model_path: str, store_path: str, llama_server_bin: str, startup_timeo
     # terminates every process it launched (see orchestrator.py).
     atexit.register(pool.shutdown)
 
-    httpd = ThreadingHTTPServer(("", 8000), make_proxy_handler(orch))
+    httpd = ThreadingHTTPServer(("", 8000), make_proxy_handler(orch, ctx_size))
     print("Starting swiftlet proxy on http://localhost:8000")
     print(f"Routing to {model_path} via {llama_server_bin}")
     try:
@@ -265,6 +357,8 @@ def main():
                               "on a 16GB Mac running a large model, keep this at 1 "
                               "unless you've confirmed you have headroom for more.")
     parser.add_argument("--threads", type=int, default=int(os.getenv("THREADS", 8)), help="CPU threads for llama-server")
+    parser.add_argument("--ctx-size", type=int, default=int(os.getenv("CTX_SIZE", 8192)),
+                         help="Context window size (default: 8192 — larger uses more memory, compensated by q8_0 KV cache)")
 
     args = parser.parse_args()
     
@@ -275,7 +369,7 @@ def main():
         return
 
     if args.model:
-        serve(args.model, args.store, args.llama_server, args.startup_timeout, args.pool_size, args.threads)
+        serve(args.model, args.store, args.llama_server, args.startup_timeout, args.pool_size, args.threads, args.ctx_size)
 
 
 if __name__ == "__main__":
