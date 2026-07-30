@@ -1,0 +1,39 @@
+name: AI Code Reviewer
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      
+      - name: AI PR Reviewer
+        uses: coderabbitai/openai-pr-reviewer@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          debug: false
+          review_simple_changes: false
+          review_comment_lgtm: false
+          openai_light_model: gpt-4o-mini
+          openai_heavy_model: gpt-4o
+          openai_timeout_ms: 900000
+          language: en-US
+          system_message: |
+            You are `@swiftlet-ai`, the official AI reviewer for the Swiftlet proxy engine.
+            Please review the code changes and provide feedback on:
+            1. Potential bugs or edge cases in hardware routing logic.
+            2. Performance bottlenecks (especially regarding unified memory usage on Apple Silicon).
+            3. Clean code practices and readability.
+            Be polite and helpful!

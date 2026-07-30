@@ -1,0 +1,12 @@
+# This file assigns specific individuals/teams to be reviewers
+# when PRs modify certain files or directories.
+
+# Default owner for everything in the repo
+*       @coolsourav100
+
+# Specific owners for critical proxy engine code
+/swiftlet/cli.py          @coolsourav100
+/swiftlet/orchestrator.py @coolsourav100
+
+# UI code
+/swiftlet/app.py          @coolsourav100

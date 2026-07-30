@@ -1,0 +1,36 @@
+name: Bug Report
+description: Create a report to help us improve Swiftlet
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what happened...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Run '...'
+        2. Do '...'
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: system_info
+    attributes:
+      label: System Information
+      description: What Mac model, macOS version, and RAM do you have?
+      placeholder: e.g. M3 Max, macOS 14.2, 36GB RAM
+    validations:
+      required: true
