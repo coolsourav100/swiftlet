@@ -1,21 +1,47 @@
-# swiftlet
+<h1 align="center">swiftlet</h1>
 
-**An adaptive tuning layer for fast local MoE inference on Apple Silicon — learns your workload, gets faster the more you use it.**
+<p align="center">
+  <b>An adaptive tuning layer for fast local MoE inference on Apple Silicon.</b><br>
+  Learns your workload, gets faster the more you use it.
+</p>
 
-swiftlet doesn't replace `llama.cpp`'s inference engine — it sits on top of it, deciding *how* to configure it for each request based on two ideas borrowed from existing work, combined for a case neither fully covers on its own:
+<p align="center">
+  <a href="https://github.com/coolsourav100/swiftlet"><b>GitHub</b></a> ·
+  <a href="docs/bb-cep-full-framework.md">BB-CEP Framework</a> ·
+  <a href="docs/validation.md">Validation</a>
+</p>
 
-- **BB-CEP** (bandwidth-balanced concurrent expert placement — see [`docs/bb-cep-full-framework.md`](docs/bb-cep-full-framework.md)): a roofline-based model for splitting MoE expert computation across CPU and GPU on unified-memory hardware, phase-aware (prefill vs. decode need different splits).
-- **[colibrì](https://github.com/JustVugg/colibri)**: pioneered treating VRAM/RAM/disk as one managed hierarchy for MoE models too large to fit in memory, and — the idea swiftlet actually borrows — a **learning cache** that records real usage and gets faster over time, plus router-lookahead prefetching.
+**Static configurations don't fit dynamic workloads.** Explore large Mixture-of-Experts (MoE) models on Apple Silicon and unified-memory hardware using a transparent proxy that dynamically shifts computation between your CPU and GPU based on the exact shape of your prompt.
 
-## Where swiftlet fits that neither source covers
+> **swiftlet doesn't replace `llama.cpp`'s inference engine — it sits on top of it.**
+> Large models have different bottlenecks depending on what they are doing. A long document Q&A (prefill) is compute-bound and wants GPU dominance. A short chat turn (decode) is memory-bound and benefits from a CPU/GPU split. swiftlet dynamically classifies requests, routes them to optimally tuned `llama-server` instances, and remembers what worked best for next time.
 
-colibrì's disk-streaming tier solves "the model is bigger than your RAM." That's not your problem if you're running Qwen3-30B-A3B or similarly-sized MoE models on a 16GB+ Mac — they already fit. What colibrì-scale models *don't* need, small resident models still benefit from: **smarter, learned scheduling of where computation happens**, not where data lives. `llama.cpp`'s own `--n-cpu-moe` is a single static value chosen once at process launch — it can't adapt between a short chat reply and a long document-processing prefill in the same session, and it doesn't remember what worked best last time.
+```bash
+$ python chat_cli.py
+Connecting to swiftlet proxy at http://localhost:8000/v1/chat/completions...
+Performance threshold set to 20.0 tok/s.
 
-swiftlet's job: **classify each request by workload shape, look up (or learn) the best CPU/GPU configuration for that shape, and route the request to a correctly-tuned `llama-server` instance** — improving automatically as it sees more of your real traffic, the way colibrì's usage-learning cache improves expert placement over a session.
-
-## Architecture
-
+You: write a rate limiter function in node js
+[Proxy] Routed 38 prompt / 2048 gen to port 8081 (decision: EXPLORE, config: 99 GPU / 8 CPU)
+  [ready] port 8081 came up after 4s
+AI: Here is a simple sliding window rate limiter...
+  Recorded 24.78 tok/s (>= threshold (FAST))
 ```
+
+## The Idea: Where swiftlet fits
+
+swiftlet combines two powerful ideas for a use-case neither fully covers on its own:
+
+1. **BB-CEP (Bandwidth-Balanced Concurrent Expert Placement)**: A roofline-based model demonstrating that MoE expert computation should be split across CPU and GPU on unified-memory hardware, and that this split must be phase-aware (prefill vs. decode).
+2. **Colibrì's Learning Cache**: The idea that an inference engine should treat memory as a hierarchy and *learn* from real usage over time.
+
+While colibrì streams models larger than RAM from disk, **swiftlet targets models that already fit in your Mac's unified memory** (like Qwen3-30B-A3B). What these resident models still desperately need is **smarter, learned scheduling of where computation happens**. `llama.cpp`'s `--n-cpu-moe` is chosen once at launch. swiftlet makes it dynamic.
+
+## Architecture & Data Flow
+
+swiftlet transparently intercepts OpenAI-compatible API traffic, deciding *how* to configure the engine for each request.
+
+```text
                     ┌─────────────────────┐
   Request  ────────▶│  Workload Classifier │  buckets by (prompt_len, expected_gen_len)
                     └──────────┬──────────┘
@@ -39,47 +65,71 @@ swiftlet's job: **classify each request by workload shape, look up (or learn) th
                     Response + measured tok/s ──▶ fed back into Learned Config Store
 ```
 
-## What's implemented vs. what's designed but not built
+## Core Techniques and Measured Results
 
-Being direct about scope, the same way the BB-CEP document was:
+- **Workload Phase Classification:** Automatically categorizes traffic into `PREFILL_HEAVY`, `DECODE_HEAVY`, or `BALANCED`. A 5,000 token document summary gets a different hardware split than a 10 token chat reply.
+- **Epsilon-Greedy Config Store:** Records real `tok/s` metrics directly from `llama-server` streams. It exploits the best-known hardware config 85% of the time, and explores untested configurations 15% of the time, perpetually optimizing for your exact machine.
+- **Memory-Aware Orchestration:** Operates a bounded `ServerPool`. By default (`max_size=1`), it aggressively evicts old configurations before cold-starting new ones, preventing OOM crashes on 16GB Macs when exploring new MoE splits.
+- **Thread & Inference Tuning:** Bypasses default thread caps to fully saturate performance cores, and natively strips out hidden reasoning overhead (like Qwen3's chain-of-thought) when it jeopardizes your generation token budgets.
 
-**Implemented and working end-to-end with llama-server:**
-- Workload classifier (`swiftlet/classifier.py`)
-- Learned config store with epsilon-greedy exploration (`swiftlet/config_store.py`)
-- Orchestrator's decision logic (`swiftlet/orchestrator.py`) — process pool management and request routing
-- HTTP Proxying (`swiftlet/cli.py`) — transparently proxies OpenAI-compatible `/v1/chat/completions` traffic, extracting actual `tok/s` measurements directly from `llama-server` streams to feed back into the learned store.
-- Interactive Chat CLI (`chat_cli.py`) — a sample frontend demonstrating streaming responses, performance threshold tracking, and graceful handling of model reasoning.
+## Open Hypotheses and Experiments
 
-## Quick start
+swiftlet treats every optimization as a hypothesis until an end-to-end A/B test proves it.
 
-1. **Install requirements:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+| Hypothesis | Current Evidence | Required Experiment |
+|---|---|---|
+| CPU/GPU splits benefit decode phases | Confirmed: pure GPU struggles with memory-bound decode | Test across different unified memory bandwidths (M3 vs M5 Max) |
+| Thread starvation masks split benefits | Confirmed: `n_threads` capping hides `--n-cpu-moe` impact | Controlled sweep with fixed threads vs automatic threads |
+| Qwen3 reasoning limits generation budget | Confirmed: 512 token limits truncate code generation | Measure `tok/s` overhead of `reasoning_content` vs pure generation |
+| Fast eviction is better than multi-residence | Confirmed: `max_size=3` causes OOM on 16GB during exploration | Test `max_size=3` on 64GB+ Mac Studios to measure cold-start latency drops |
 
-2. **Set up your environment:**
-   Instead of passing long paths every time, you can configure swiftlet using a `.env` file. Copy the example and edit it to match your paths:
-   ```bash
-   cp .env.example .env
-   ```
-   *Note: If you use Ollama on macOS, your `llama-server` binary is usually at `/Applications/Ollama.app/Contents/Resources/llama-server`, and models are stored in `~/.ollama/models/blobs/`.*
+## Getting Started
 
-3. **Start the swiftlet proxy:**
-   ```bash
-   python -m swiftlet.cli
-   ```
-   *(Alternatively, you can still pass `--model` and `--llama-server` via command line arguments if you prefer).*
+You need **Python 3**, **llama.cpp** (`llama-server`), and a **GGUF MoE Model**.
 
-4. **Chat with your model:**
-   In a separate terminal, run the chat client:
-   ```bash
-   python chat_cli.py
-   ```
-   As you chat, the proxy will transparently launch `llama-server` instances with different CPU/GPU splits, measure the token generation speed, and learn which hardware configuration is optimal for different types of prompts (e.g., short chats vs. long coding tasks).
+### 1. Installation
 
-## Credits
+```bash
+git clone https://github.com/coolsourav100/swiftlet.git
+cd swiftlet
+pip install -r requirements.txt
+```
 
-Built on ideas from [colibrì](https://github.com/JustVugg/colibri) (JustVugg) and `llama.cpp` (ggml-org). This project doesn't reimplement either — it's a thin, honest orchestration layer that assumes you already have `llama.cpp` built with Metal support.
+### 2. Configuration
 
-## License
-Apache 2.0
+Copy the example environment file and configure your paths. You won't need to pass long CLI arguments ever again.
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` to point to your model and `llama-server` binary:
+```env
+MODEL_PATH=/Users/you/.ollama/models/blobs/sha256-...
+LLAMA_SERVER_PATH=/Applications/Ollama.app/Contents/Resources/llama-server
+STARTUP_TIMEOUT=300
+POOL_SIZE=1
+THREADS=8
+```
+
+### 3. Run the Proxy
+
+Start swiftlet. It will bind to `http://localhost:8000` and act as a drop-in replacement for any OpenAI-compatible client.
+
+```bash
+python -m swiftlet.cli
+```
+
+### 4. Chat and Learn
+
+In a separate terminal, launch the interactive chat client. As you chat, the proxy will cold-start the engine when necessary, measure the speeds, and permanently memorize the best hardware splits for your Mac.
+
+```bash
+python chat_cli.py
+```
+
+## Credits & License
+
+Built on ideas from **[colibrì](https://github.com/JustVugg/colibri)** (JustVugg) and **llama.cpp** (ggml-org). This project doesn't reimplement either — it's a thin, honest orchestration layer designed to extract maximum efficiency from `llama.cpp`'s Metal backend on Apple Silicon.
+
+**License:** Apache 2.0
