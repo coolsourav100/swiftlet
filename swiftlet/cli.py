@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 from dotenv import load_dotenv
+from pathlib import Path
 
 from .classifier import classify
 from .config_store import LearnedConfigStore, BayesianConfigStore
@@ -110,6 +111,94 @@ def make_proxy_handler(orch: Orchestrator, ctx_size: int = 8192):
             else:
                 return len(str(prompt)) // 3
 
+        # ── NEW: Web UI + Dashboard API ────────────────────────
+
+        def do_GET(self):
+            if self.path in ('/', '/ui', '/ui.html'):
+                self._serve_ui()
+            elif self.path == '/api/state':
+                self._serve_state()
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def _serve_ui(self):
+            """Serve the single-page Swiftlet UI."""
+            ui_path = Path(__file__).parent / "ui.html"
+            if not ui_path.exists():
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"ui.html not found")
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(ui_path.read_bytes())
+
+        def _serve_state(self):
+            """Return the learned config store as JSON for the dashboard."""
+            from .config_store import FULL_CONFIG_SPACE
+
+            store = orch.store
+            signatures = {}
+
+            for sig_str, configs in store._data.items():
+                signatures[sig_str] = {}
+                for cfg_key, stats in configs.items():
+                    signatures[sig_str][cfg_key] = {
+                        "config": {
+                            "n_gpu_layers": stats.config.n_gpu_layers,
+                            "n_cpu_moe": stats.config.n_cpu_moe,
+                            "batch_size": stats.config.batch_size,
+                        },
+                        "trials": stats.trials,
+                        "total_tok_per_sec": stats.total_tok_per_sec,
+                        "mean_tok_per_sec": stats.mean_tok_per_sec,
+                    }
+
+            # Config space for the matrix columns
+            config_space = [
+                {
+                    "n_gpu_layers": c.n_gpu_layers,
+                    "n_cpu_moe": c.n_cpu_moe,
+                    "batch_size": c.batch_size,
+                    "key": c.key(),
+                }
+                for c in FULL_CONFIG_SPACE
+            ]
+
+            # Active servers
+            active = []
+            for handle in orch.pool._pool.values():
+                active.append({
+                    "port": handle.port,
+                    "config": {
+                        "n_gpu_layers": handle.config.n_gpu_layers,
+                        "n_cpu_moe": handle.config.n_cpu_moe,
+                        "batch_size": handle.config.batch_size,
+                    },
+                    "backend": getattr(handle, "backend_name", "llama.cpp"),
+                    "uptime_s": round(time.time() - handle.started_at, 0),
+                })
+
+            body = json.dumps({
+                "signatures": signatures,
+                "config_space": config_space,
+                "active_servers": active,
+                "ctx_size": ctx_size,
+                "last_signature": getattr(orch, "_last_signature", None),
+                "last_config_key": getattr(orch, "_last_config_key", None),
+                "cpu_usage": psutil.cpu_percent(percpu=True)
+            })
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body.encode())
+
+        # ── Existing POST handler (unchanged) ──────────────────
+
         def do_POST(self):
             content_length = int(self.headers.get("Content-Length", 0))
             post_data = self.rfile.read(content_length)
@@ -147,6 +236,9 @@ def make_proxy_handler(orch: Orchestrator, ctx_size: int = 8192):
 
             try:
                 sig, config, handle, exploring = orch.route(prompt_tokens, expected_gen_tokens)
+                orch._last_signature = str(sig)
+                orch._last_config_key = config.key()
+                
                 tag = "EXPLORE" if exploring else "EXPLOIT"
                 print(
                     f"\n[Proxy] Routed {prompt_tokens} prompt / {expected_gen_tokens} gen "
@@ -307,11 +399,28 @@ def serve(model_path: str, store_path: str, backend_type: str, learning_type: st
     atexit.register(pool.shutdown)
 
     httpd = ThreadingHTTPServer(("", 8000), make_proxy_handler(orch, ctx_size))
-    print("Starting swiftlet proxy on http://localhost:8000")
-    print(f"  Backend:  {backend_type}")
-    print(f"  Learning: {learning_type}")
-    print(f"  Model:    {model_path}")
-    print(f"  CTX:      {ctx_size}")
+    print(r"""
+  ███████╗██╗    ██╗██╗███████╗████████╗██╗     ███████╗████████╗
+  ██╔════╝██║    ██║██║██╔════╝╚══██╔══╝██║     ██╔════╝╚══██╔══╝
+  ███████╗██║ █╗ ██║██║█████╗     ██║   ██║     █████╗     ██║   
+  ╚════██║██║███╗██║██║██╔══╝     ██║   ██║     ██╔══╝     ██║   
+  ███████║╚███╔███╔╝██║██║        ██║   ███████╗███████╗   ██║   
+  ╚══════╝ ╚══╝╚══╝ ╚═╝╚═╝        ╚═╝   ╚══════╝╚══════╝   ╚═╝   
+
+  v2.0.1
+
+  ⏳ Starting server...
+""")
+    print("  ✔ Swiftlet is running!\n")
+    print("    Dashboard:  http://localhost:8000")
+    print("    API Base:   http://localhost:8000/v1\n")
+    print("    Point your CLI tool (Cursor, Cline, Codex) to:")
+    print("    http://localhost:8000/v1\n")
+    print(f"    Backend:    {backend_type}")
+    print(f"    Learning:   {learning_type}")
+    print(f"    Model:      {model_path}")
+    print(f"    CTX Size:   {ctx_size}\n")
+    print("    Press Ctrl+C to stop")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -350,11 +459,11 @@ def main():
 
     if args.model:
         serve(
-            model_path=args.model, 
+            model_path=os.path.expanduser(args.model), 
             store_path=args.store, 
             backend_type=args.backend,
             learning_type=args.learning,
-            llama_server_bin=args.llama_server, 
+            llama_server_bin=os.path.expanduser(args.llama_server), 
             startup_timeout=args.startup_timeout, 
             pool_size=args.pool_size, 
             threads=args.threads, 

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 450" width="100%" height="100%">
+    <defs>
+        <style>
+            .bg { fill: #1E1E1E; }
+            .text-main { fill: #E0E0E0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+            .text-title { font-size: 24px; font-weight: bold; fill: #FFFFFF; }
+            .text-subtitle { font-size: 14px; fill: #888888; }
+            .bar-bg { fill: #2A2A2A; rx: 4; }
+            .bar-fill { fill: #4fd1c5; rx: 4; }
+            .bar-fill-oracle { fill: #007ACC; rx: 4; }
+            .bar-fill-static { fill: #FF5F56; rx: 4; }
+            .text-label { font-size: 14px; font-weight: 500; text-anchor: end; }
+            .text-value { font-size: 13px; font-weight: bold; fill: #1E1E1E; text-anchor: end; }
+            .text-value-out { font-size: 13px; font-weight: bold; fill: #E0E0E0; text-anchor: start; }
+        </style>
+    </defs>
+    <rect width="100%" height="100%" class="bg" rx="12"/>
+    <text x="40" y="50" class="text-main text-title">Routing Strategy Benchmark (Avg Tokens/sec)</text>
+    <text x="40" y="75" class="text-main text-subtitle">Higher is better. Evaluated across 100 varying requests.</text>
+    
+        <text x="270" y="120" class="text-main text-label">Oracle (upper bound)</text>
+        <rect x="290" y="100" width="450" height="30" class="bar-bg" />
+        <rect x="290" y="100" width="450.0" height="30" class="bar-fill-oracle" />
+        <text x="730.0" y="120" class="text-value">31.99 t/s</text>
+        <text x="270" y="175" class="text-main text-label">Ollama / llama.cpp (static gpu=99/moe=0)</text>
+        <rect x="290" y="155" width="450" height="30" class="bar-bg" />
+        <rect x="290" y="155" width="398.374492028759" height="30" class="bar-fill" />
+        <text x="678.374492028759" y="175" class="text-value">28.32 t/s</text>
+        <text x="270" y="230" class="text-main text-label">Static mid-range (gpu=60/moe=6)</text>
+        <rect x="290" y="210" width="450" height="30" class="bar-bg" />
+        <rect x="290" y="210" width="372.06939668646453" height="30" class="bar-fill-static" />
+        <text x="652.0693966864645" y="230" class="text-value">26.45 t/s</text>
+        <text x="270" y="285" class="text-main text-label">Random config</text>
+        <rect x="290" y="265" width="450" height="30" class="bar-bg" />
+        <rect x="290" y="265" width="390.9190371991247" height="30" class="bar-fill-static" />
+        <text x="670.9190371991247" y="285" class="text-value">27.79 t/s</text>
+        <text x="270" y="340" class="text-main text-label">Swiftlet ε-greedy (v1)</text>
+        <rect x="290" y="320" width="450" height="30" class="bar-bg" />
+        <rect x="290" y="320" width="449.01531728665213" height="30" class="bar-fill" />
+        <text x="729.0153172866521" y="340" class="text-value">31.92 t/s</text>
+        <text x="270" y="395" class="text-main text-label">Swiftlet Bayesian (v2)</text>
+        <rect x="290" y="375" width="450" height="30" class="bar-bg" />
+        <rect x="290" y="375" width="439.8718349484214" height="30" class="bar-fill" />
+        <text x="719.8718349484213" y="395" class="text-value">31.27 t/s</text></svg>

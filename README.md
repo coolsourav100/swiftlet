@@ -14,13 +14,14 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo.svg" width="600" alt="Swiftlet Animated Demo">
+  <img src="assets/ui_screenshot.png" width="800" alt="Swiftlet Web UI Dashboard">
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/version-2.0.1-success.svg" alt="Version 2.0.1">
   <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/status-Experimental-orange" alt="Experimental">
+  <img src="https://img.shields.io/badge/status-Beta-orange" alt="Beta">
 </p>
 
 **Static configurations don't fit dynamic workloads.** Explore large Mixture-of-Experts (MoE) models on Apple Silicon and unified-memory hardware using a transparent proxy that dynamically shifts computation between your CPU and GPU based on the exact shape of your prompt.
@@ -29,9 +30,9 @@
 > Large models have different bottlenecks depending on what they are doing. A long document Q&A (prefill) is compute-bound and wants GPU dominance. A short chat turn (decode) is memory-bound and benefits from a CPU/GPU split. swiftlet dynamically classifies requests, routes them to optimally tuned `llama-server` instances, and remembers what worked best for next time.
 
 ```bash
-$ python -m swiftlet.app
+$ ./start.command
 ```
-*Launch the rich terminal UI to chat with your model and monitor live CPU core utilization.*
+*Launch the rich Web UI Dashboard to chat with your model, monitor live CPU core utilization, and view real-time Bayesian routing metrics.*
 
 ## The Idea: Where swiftlet fits
 
@@ -89,6 +90,14 @@ It demonstrates how the absolute best hardware configuration (CPU/GPU split) com
   <img src="assets/performance_matrix.svg" width="800" alt="Performance Matrix">
 </p>
 
+### Global Routing Strategies Benchmark
+
+The following benchmark demonstrates the effectiveness of Swiftlet's dynamic routing strategies across 100 varying prompt/generation scenarios. As shown, the Bayesian learning approaches the Oracle theoretical maximum, significantly outperforming static boundaries.
+
+<p align="center">
+  <img src="assets/benchmark_results.svg" width="800" alt="Benchmark Results">
+</p>
+
 ## Open Hypotheses and Experiments
 
 swiftlet treats every optimization as a hypothesis until an end-to-end A/B test proves it.
@@ -119,9 +128,9 @@ We have built a frictionless, "1-Click" setup process specifically designed so t
 
 ### 3. Launch the App
 1. Once installation is complete, double-click the `start.command` file.
-2. It will automatically open two terminal tabs:
-   - **The Engine:** One tab runs the background proxy that transparently optimizes your hardware splits.
-   - **The Chat UI:** The other tab opens the sleek Swiftlet Chat interface where you can talk to your model!
+2. It will automatically:
+   - Start the **Swiftlet Proxy** in the background, which optimizes your hardware splits.
+   - Launch the **Swiftlet Web UI Dashboard** in your browser, where you can chat with your model, view the Bayesian learning matrix, and monitor live CPU usage!
 
 
 ## Credits & License
