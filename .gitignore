@@ -20,3 +20,7 @@ swiftlet_proxy.log
 
 # Large binaries
 *.gguf
+swiftlet_benchmark_results.json
+v2_store.json
+v3_store.json
+.swiftlet_cache/

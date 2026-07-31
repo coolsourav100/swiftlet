@@ -16,17 +16,23 @@ import httpx
 from dotenv import load_dotenv
 
 from .classifier import classify
-from .config_store import LearnedConfigStore
+from .config_store import LearnedConfigStore, BayesianConfigStore
 from .orchestrator import Orchestrator, ServerPool, ServerHandle
 
+from .backends.llamacpp import LlamaCppLauncher
+from .backends.mlx import MLXLauncher
 
-def demo(store_path: str):
+
+def demo(store_path: str, learning_type: str = "eps-greedy"):
     """
     Runs a handful of representative requests through the real classifier +
     config store + pool logic, using a fake launcher (no actual model load),
     so you can see the routing decisions and learning behavior directly.
     """
-    store = LearnedConfigStore(store_path, seed=42)
+    if learning_type == "bayesian":
+        store = BayesianConfigStore(store_path, seed=42)
+    else:
+        store = LearnedConfigStore(store_path, seed=42)
 
     def fake_launcher(config, port):
         print(f"  [would launch] llama-server --n-gpu-layers {config.n_gpu_layers} "
@@ -41,6 +47,10 @@ def demo(store_path: str):
         ("long document Q&A", 4000, 100),
         ("open-ended long generation", 100, 1500),
         ("short chat turn (again)", 90, 140),
+        ("code refactoring", 2000, 800),
+        ("quick question", 50, 60),
+        ("deep analysis", 3000, 2000),
+        ("follow-up chat", 120, 200),
     ]
 
     for name, prompt_tokens, gen_tokens in scenarios:
@@ -260,69 +270,34 @@ def hunt_zombies(cache_dir: str):
     if killed_count > 0:
         print(f"  [zombie hunter] 🔫 Terminated {killed_count} orphaned llama-server process(es). VRAM cleared.")
 
-def serve(model_path: str, store_path: str, llama_server_bin: str, startup_timeout: int = 300, pool_size: int = 1, threads: int = 8, ctx_size: int = 8192):
+def serve(model_path: str, store_path: str, backend_type: str, learning_type: str, llama_server_bin: str, startup_timeout: int = 300, pool_size: int = 1, threads: int = 8, ctx_size: int = 8192):
     cache_dir = os.path.join(os.getcwd(), ".swiftlet_cache")
     os.makedirs(cache_dir, exist_ok=True)
     
     # Hunt and kill orphaned processes from prior crashed runs before allocating new servers
     hunt_zombies(cache_dir)
     
-    store = LearnedConfigStore(store_path, seed=42)
+    if learning_type == "bayesian":
+        store = BayesianConfigStore(store_path, seed=42)
+    else:
+        store = LearnedConfigStore(store_path, seed=42)
 
-    def real_launcher(config, port) -> ServerHandle:
-        print(
-            f"  [launching] {llama_server_bin} --n-gpu-layers {config.n_gpu_layers} "
-            f"--n-cpu-moe {config.n_cpu_moe} --batch-size {config.batch_size} --threads {threads} --port {port}"
+    if backend_type == "mlx":
+        backend = MLXLauncher(model_path=model_path, startup_timeout=startup_timeout)
+    else:
+        backend = LlamaCppLauncher(
+            model_path=model_path, 
+            bin_path=llama_server_bin, 
+            ctx_size=ctx_size, 
+            threads=threads, 
+            startup_timeout=startup_timeout, 
+            cache_dir=cache_dir
         )
 
-        proc = subprocess.Popen([
-            llama_server_bin,
-            "-m", model_path,
-            "--n-gpu-layers", str(config.n_gpu_layers),
-            "--n-cpu-moe", str(config.n_cpu_moe),
-            "--batch-size", str(config.batch_size),
-            "--threads", str(threads),
-            "-np", "1",
-            "-c", str(ctx_size),
-            "--cache-type-k", "q8_0",
-            "--cache-type-v", "q8_0",
-            "--slot-save-path", cache_dir,
-            "--port", str(port),
-        ])
-
-        poll_interval = 2
-        elapsed = 0
-
-        while elapsed < startup_timeout:
-            # Fail fast if the process already died, instead of waiting out
-            # the full timeout on a crash — a dead process will never pass
-            # the health check no matter how long you wait.
-            if proc.poll() is not None:
-                raise RuntimeError(
-                    f"llama-server on port {port} exited early (code {proc.returncode}) "
-                    f"during startup — check its logs above for the actual error."
-                )
-
-            try:
-                res = httpx.get(f"http://127.0.0.1:{port}/health", timeout=2.0)
-                if res.status_code == 200:
-                    print(f"  [ready] port {port} came up after {elapsed}s")
-                    break
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RequestError):
-                pass
-
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-            if elapsed % 20 == 0:
-                print(f"  [waiting] still loading on port {port}... ({elapsed}s elapsed)")
-        else:
-            proc.terminate()
-            raise RuntimeError(
-                f"llama-server on port {port} didn't come up within {startup_timeout}s. "
-                f"If your model is very large, pass --startup-timeout with a bigger value."
-            )
-
-        return ServerHandle(config=config, port=port, started_at=time.time(), process=proc)
+    # Wrap the BackendHandle into the ServerHandle expected by ServerPool
+    def real_launcher(config, port) -> ServerHandle:
+        bh = backend.launch(config, port)
+        return ServerHandle(config=bh.config, port=bh.port, started_at=bh.started_at, process=bh.process)
 
     pool = ServerPool(max_size=pool_size, launcher=real_launcher)
     orch = Orchestrator(store, pool)
@@ -333,7 +308,10 @@ def serve(model_path: str, store_path: str, llama_server_bin: str, startup_timeo
 
     httpd = ThreadingHTTPServer(("", 8000), make_proxy_handler(orch, ctx_size))
     print("Starting swiftlet proxy on http://localhost:8000")
-    print(f"Routing to {model_path} via {llama_server_bin}")
+    print(f"  Backend:  {backend_type}")
+    print(f"  Learning: {learning_type}")
+    print(f"  Model:    {model_path}")
+    print(f"  CTX:      {ctx_size}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -346,6 +324,8 @@ def main():
     
     parser = argparse.ArgumentParser(description="swiftlet — adaptive CPU/GPU config learning for llama.cpp")
     parser.add_argument("--model", default=os.getenv("MODEL_PATH"), help="Path to a GGUF model")
+    parser.add_argument("--backend", default=os.getenv("BACKEND", "llamacpp"), choices=["llamacpp", "mlx"], help="Inference backend (default: llamacpp)")
+    parser.add_argument("--learning", default=os.getenv("LEARNING", "eps-greedy"), choices=["eps-greedy", "bayesian"], help="Learning algorithm for the config store")
     parser.add_argument("--store", default=os.getenv("STORE_PATH", "swiftlet_learned_config.json"), help="Path to the learned config store")
     parser.add_argument("--demo", action="store_true", help="Run the routing/learning demo with a fake launcher")
     parser.add_argument("--llama-server", default=os.getenv("LLAMA_SERVER_PATH", "llama-server"), help="Path to the llama-server binary")
@@ -365,11 +345,21 @@ def main():
     if args.demo or not args.model:
         if not args.demo:
             print("No --model given — running --demo instead.\n")
-        demo(args.store)
+        demo(args.store, args.learning)
         return
 
     if args.model:
-        serve(args.model, args.store, args.llama_server, args.startup_timeout, args.pool_size, args.threads, args.ctx_size)
+        serve(
+            model_path=args.model, 
+            store_path=args.store, 
+            backend_type=args.backend,
+            learning_type=args.learning,
+            llama_server_bin=args.llama_server, 
+            startup_timeout=args.startup_timeout, 
+            pool_size=args.pool_size, 
+            threads=args.threads, 
+            ctx_size=args.ctx_size
+        )
 
 
 if __name__ == "__main__":
