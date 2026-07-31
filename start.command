@@ -26,6 +26,12 @@ if [ ! -f ".env" ]; then
     echo "⚠️  Warning: .env file not found. Please run ./install.command if you haven't already to generate it."
 fi
 
-echo "Starting Swiftlet..."
-python3 -m swiftlet.app
+echo "Starting Swiftlet Web UI (React/Vite)..."
+npm --prefix swiftlet/frontend run dev &
+VITE_PID=$!
 
+echo "Starting Swiftlet Proxy..."
+python3 -m swiftlet.cli
+
+# Clean up the background Vite process when the proxy exits
+kill $VITE_PID 2>/dev/null
