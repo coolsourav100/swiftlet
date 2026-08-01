@@ -82,7 +82,7 @@ swiftlet transparently intercepts OpenAI-compatible API traffic, deciding *how* 
 
 The following is a **Multi-Dimensional Use-Case Profile** based on real data recorded by `swiftlet` on an Apple M5 Mac (16GB). 
 
-*See our [Performance Evaluation Methodology](docs/research_matrix.md) for full details on how we measure Prefill (TTFT) vs Decode (TPOT) speeds.*
+*See our [Performance Evaluation Methodology](docs/validation.md) for full details on how we measure Prefill (TTFT) vs Decode (TPOT) speeds.*
 
 It demonstrates how the absolute best hardware configuration (CPU/GPU split) completely changes depending on the size of your input prompt vs your expected output generation. Swiftlet learns these profiles and automatically routes your requests to the optimal split.
 
