@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LearningState } from '../api';
+import { LearningState, API } from '../api';
 import { CpuActivityShader } from './CpuActivityShader';
+import { Sparkline } from './Sparkline';
 
 const SIG_LABELS: Record<string, { label: string; phase: string }> = {
   'prompt_b0_gen_b0': { label: 'Quick Q&A', phase: 'balanced' },
@@ -22,6 +23,24 @@ interface DashboardPanelProps {
 }
 
 export function DashboardPanel({ state, history, stats }: DashboardPanelProps) {
+  const importRef = useRef<HTMLInputElement>(null);
+
+  const tpsHistory = useMemo(() => {
+    return history.filter(h => h.tps !== null).map(h => h.tps!).reverse();
+  }, [history]);
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const result = await API.importConfig(file);
+    if (result) {
+      alert(`Imported ${result.imported} config entries. Dashboard will update on next poll.`);
+    } else {
+      alert('Import failed. Check the file format.');
+    }
+    e.target.value = '';
+  };
+
   const [minTps, maxTps] = useMemo(() => {
     if (!state) return [0, 40];
     let min = Infinity;
@@ -49,7 +68,22 @@ export function DashboardPanel({ state, history, stats }: DashboardPanelProps) {
       {/* Dashboard Header */}
       <div className="px-3 py-1.5 border-b border-outline-variant flex justify-between items-center bg-surface-container shrink-0 rounded-t-lg">
         <h2 className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-widest">Learning Dashboard</h2>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => API.exportConfig()}
+            title="Export learned profile"
+            className="p-0.5 rounded hover:bg-surface-container-highest text-on-surface-variant hover:text-primary-container transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">download</span>
+          </button>
+          <button
+            onClick={() => importRef.current?.click()}
+            title="Import learned profile"
+            className="p-0.5 rounded hover:bg-surface-container-highest text-on-surface-variant hover:text-primary-container transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">upload</span>
+          </button>
+          <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
           <span className="material-symbols-outlined text-[12px] text-tertiary-container">vital_signs</span>
           <span className="font-label-sm text-[10px] text-tertiary-container">Real-time</span>
         </div>
@@ -69,6 +103,13 @@ export function DashboardPanel({ state, history, stats }: DashboardPanelProps) {
           <StatCard label="In Tokens" value={stats.tokens ? stats.tokens.prompt : 0} color="text-tertiary-container" />
           <StatCard label="Out Tokens" value={stats.tokens ? stats.tokens.completion : 0} color="text-tertiary-container" />
         </div>
+
+        {/* Performance Sparkline */}
+        {tpsHistory.length > 1 && (
+          <div className="bg-surface-container-low border border-outline-variant/50 rounded-lg p-2">
+            <Sparkline data={tpsHistory} width={580} height={48} label="Tokens/sec over time" />
+          </div>
+        )}
 
         {/* Learning Matrix */}
         <div className="space-y-1.5">

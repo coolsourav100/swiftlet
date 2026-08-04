@@ -1,0 +1,21 @@
+# swiftlet.toml — Configuration file for Swiftlet
+# CLI flags override any values set here.
+
+[model]
+# path = "~/.ollama/models/qwen3-30b-a3b.gguf"
+ctx_size = 8192
+
+[server]
+backend = "llamacpp"      # "llamacpp" or "mlx" or "ollama"
+# llama_server = "/Applications/Ollama.app/Contents/Resources/llama-server"
+pool_size = 1
+threads = 8
+startup_timeout = 300
+
+[learning]
+algorithm = "bayesian"     # "eps-greedy" or "bayesian"
+store_path = "swiftlet_learned_config.json"
+
+[logging]
+level = "INFO"             # DEBUG, INFO, WARNING, ERROR
+# log_dir = "~/.swiftlet/logs"

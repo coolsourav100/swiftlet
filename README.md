@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.1-success.svg" alt="Version 2.0.1">
+  <img src="https://img.shields.io/badge/version-2.1.0-success.svg" alt="Version 2.1.0">
   <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/status-Beta-orange" alt="Beta">
@@ -33,6 +33,16 @@
 $ ./start.command
 ```
 *Launch the rich Web UI Dashboard to chat with your model, monitor live CPU core utilization, and view real-time Bayesian routing metrics.*
+
+## What's New in v2.1.0
+
+- **Ollama Backend Support:** Proxy and learn configurations for models running in Ollama using `--backend ollama`.
+- **🌐 Privacy-Safe Web Search:** Your local LLM can now answer questions about current time, date, news, and events — without leaking any data. Swiftlet's proxy searches DuckDuckGo (privacy-first, no tracking) and injects results as context. The model itself never touches the internet. Enable with `--web-search` or the toggle in Settings.
+- **System Prompt & Conversation History:** The Web UI now supports custom system prompts, presets, and maintaining conversation history.
+- **Export/Import Profiles:** Download and upload learned hardware config profiles from the Dashboard.
+- **TOML Configuration:** Use `swiftlet.toml` for configuration. Run `python -m swiftlet.cli --init-config` to generate a template.
+- **Structured Output:** Seamlessly forwards `response_format` JSON schemas to the backend.
+- **Performance Sparklines:** Track your tok/s visually over time in the Dashboard.
 
 ## The Idea: Where swiftlet fits
 
