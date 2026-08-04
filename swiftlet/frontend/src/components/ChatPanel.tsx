@@ -1,17 +1,39 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { API, Message } from '../api';
+
+interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: number;
+}
+
+function loadConversations(): Conversation[] {
+  try {
+    return JSON.parse(localStorage.getItem('swiftlet_conversations') || '[]');
+  } catch { return []; }
+}
+
+function saveConversations(convos: Conversation[]) {
+  localStorage.setItem('swiftlet_conversations', JSON.stringify(convos.slice(0, 50)));
+}
 
 interface ChatPanelProps {
   onStatusChange: (status: 'connected' | 'disconnected') => void;
   onNewRequest: (tag: string, explore: boolean, tps: number | null, pTokens: number, cTokens: number) => void;
   onTokensUpdate?: (prompt: number, completion: number) => void;
+  systemPrompt?: string;
+  webSearchEnabled?: boolean;
 }
 
-export function ChatPanel({ onStatusChange, onNewRequest, onTokensUpdate }: ChatPanelProps) {
+export function ChatPanel({ onStatusChange, onNewRequest, onTokensUpdate, systemPrompt, webSearchEnabled }: ChatPanelProps) {
+  const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
+  const [activeConvoId, setActiveConvoId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [connected, setConnected] = useState(false);
   
   // Streaming state for the current AI response
@@ -44,6 +66,47 @@ export function ChatPanel({ onStatusChange, onNewRequest, onTokensUpdate }: Chat
     }
   }, [messages, currentReasoning, currentContent]);
 
+  // Persist conversation after messages update
+  const persistConversation = useCallback((msgs: Message[]) => {
+    if (msgs.length === 0) return;
+    const id = activeConvoId || crypto.randomUUID();
+    const firstUserMsg = msgs.find(m => m.role === 'user');
+    const title = firstUserMsg ? firstUserMsg.content.slice(0, 60) : 'New Chat';
+    setActiveConvoId(id);
+    setConversations(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      const convo: Conversation = { id, title, messages: msgs, createdAt: prev.find(c => c.id === id)?.createdAt || Date.now() };
+      const result = [convo, ...updated];
+      saveConversations(result);
+      return result;
+    });
+  }, [activeConvoId]);
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setActiveConvoId(null);
+    setShowHistory(false);
+  };
+
+  const handleLoadConversation = (convo: Conversation) => {
+    setMessages(convo.messages);
+    setActiveConvoId(convo.id);
+    setShowHistory(false);
+  };
+
+  const handleDeleteConversation = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConversations(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      saveConversations(updated);
+      return updated;
+    });
+    if (activeConvoId === id) {
+      setMessages([]);
+      setActiveConvoId(null);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isStreaming) return;
     
@@ -66,8 +129,13 @@ export function ChatPanel({ onStatusChange, onNewRequest, onTokensUpdate }: Chat
     let pTokens = 0;
     let cTokens = 0;
 
+    // Build messages with system prompt prepended
+    const apiMessages = systemPrompt
+      ? [{ role: 'user' as const, content: systemPrompt }, ...newMessages]
+      : newMessages;
+
     await API.chat(
-      newMessages,
+      apiMessages,
       (delta) => {
         let tokensUpdated = false;
         if (delta.reasoning_content) {
@@ -95,13 +163,15 @@ export function ChatPanel({ onStatusChange, onNewRequest, onTokensUpdate }: Chat
         }
       },
       () => {
-        setMessages([...newMessages, { 
-          role: 'assistant', 
+        const finalMessages = [...newMessages, { 
+          role: 'assistant' as const, 
           content: localContent, 
           reasoning: localReasoning,
           prompt_tokens: pTokens,
           completion_tokens: cTokens
-        }]);
+        }];
+        setMessages(finalMessages);
+        persistConversation(finalMessages);
         setIsStreaming(false);
         setCurrentContent('');
         setCurrentReasoning('');
@@ -117,7 +187,8 @@ export function ChatPanel({ onStatusChange, onNewRequest, onTokensUpdate }: Chat
           pTokens = parseInt(headers.promptTokens, 10);
           onTokensUpdate?.(pTokens, cTokens);
         }
-      }
+      },
+      { webSearch: webSearchEnabled }
     );
   };
 
@@ -125,7 +196,23 @@ export function ChatPanel({ onStatusChange, onNewRequest, onTokensUpdate }: Chat
     <div className="flex flex-col h-full overflow-hidden relative min-w-0 bg-surface-container rounded-lg border border-outline-variant">
       {/* Chat Header */}
       <div className="px-3 py-1.5 border-b border-outline-variant flex justify-between items-center bg-surface-container-low shrink-0">
-        <h2 className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-widest">Swiftlet Chat</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-widest">Swiftlet Chat</h2>
+          <button
+            onClick={handleNewChat}
+            title="New chat"
+            className="p-0.5 rounded hover:bg-surface-container-highest text-on-surface-variant hover:text-primary-container transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">add</span>
+          </button>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            title="Chat history"
+            className={`p-0.5 rounded transition-colors ${showHistory ? 'bg-primary-container/10 text-primary-container' : 'text-on-surface-variant hover:bg-surface-container-highest hover:text-primary-container'}`}
+          >
+            <span className="material-symbols-outlined text-[14px]">history</span>
+          </button>
+        </div>
         <div className="flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-primary-container' : 'bg-error'}`}></span>
           <span className={`font-label-sm text-[9px] ${connected ? 'text-primary-container' : 'text-error'}`}>
@@ -133,6 +220,36 @@ export function ChatPanel({ onStatusChange, onNewRequest, onTokensUpdate }: Chat
           </span>
         </div>
       </div>
+
+      {/* Conversation History Dropdown */}
+      {showHistory && (
+        <div className="border-b border-outline-variant bg-surface-container-low max-h-48 overflow-y-auto scrollbar-thin">
+          {conversations.length === 0 ? (
+            <div className="px-3 py-2 text-[10px] text-on-surface-variant">No saved conversations</div>
+          ) : (
+            conversations.map(convo => (
+              <div
+                key={convo.id}
+                onClick={() => handleLoadConversation(convo)}
+                className={`flex items-center justify-between px-3 py-1.5 cursor-pointer hover:bg-surface-container-highest transition-colors group ${
+                  activeConvoId === convo.id ? 'bg-primary-container/5 border-l-2 border-primary-container' : ''
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] text-on-surface truncate">{convo.title}</div>
+                  <div className="text-[8px] text-on-surface-variant">{new Date(convo.createdAt).toLocaleDateString()} · {convo.messages.length} msgs</div>
+                </div>
+                <button
+                  onClick={(e) => handleDeleteConversation(convo.id, e)}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-on-surface-variant hover:text-error transition-all"
+                >
+                  <span className="material-symbols-outlined text-[12px]">delete</span>
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       <div 
         ref={scrollContainerRef}

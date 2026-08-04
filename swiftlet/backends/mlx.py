@@ -5,6 +5,9 @@ import sys
 
 from swiftlet.backends.base import BackendLauncher, BackendHandle
 from swiftlet.config_store import EngineConfig
+from swiftlet.logging_config import get_logger
+
+_log = get_logger("mlx")
 
 class MLXLauncher(BackendLauncher):
     def __init__(self, model_path: str, startup_timeout: int = 300):
@@ -15,8 +18,8 @@ class MLXLauncher(BackendLauncher):
         # Note: MLX dynamically handles unified memory scheduling automatically.
         # It doesn't accept n_gpu_layers or n_cpu_moe as explicit CLI parameters.
         # Swiftlet will still route the request and record tok/s, but MLX makes the final hardware split.
-        print(
-            f"  [launching mlx] python3 -m mlx_lm.server --model {self.model_path} --port {port}"
+        _log.info(
+            f"[launching mlx] python3 -m mlx_lm.server --model {self.model_path} --port {port}"
         )
 
         proc = subprocess.Popen([
@@ -40,7 +43,7 @@ class MLXLauncher(BackendLauncher):
                 # mlx_lm.server responds to /v1/models (which is OpenAI compatible)
                 res = httpx.get(f"http://127.0.0.1:{port}/v1/models", timeout=2.0)
                 if res.status_code == 200:
-                    print(f"  [ready] mlx on port {port} came up after {elapsed}s")
+                    _log.info(f"[ready] mlx on port {port} came up after {elapsed}s")
                     break
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.RequestError):
                 pass
@@ -48,7 +51,7 @@ class MLXLauncher(BackendLauncher):
             time.sleep(poll_interval)
             elapsed += poll_interval
             if elapsed % 20 == 0:
-                print(f"  [waiting] still loading on port {port}... ({elapsed}s elapsed)")
+                _log.info(f"[waiting] still loading on port {port}... ({elapsed}s elapsed)")
         else:
             proc.terminate()
             raise RuntimeError(

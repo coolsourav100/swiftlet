@@ -5,6 +5,9 @@ import time
 
 from swiftlet.backends.base import BackendLauncher, BackendHandle
 from swiftlet.config_store import EngineConfig
+from swiftlet.logging_config import get_logger
+
+_log = get_logger("llamacpp")
 
 class LlamaCppLauncher(BackendLauncher):
     def __init__(self, model_path: str, bin_path: str, ctx_size: int, threads: int, startup_timeout: int = 300, cache_dir: str = ".swiftlet_cache"):
@@ -16,8 +19,8 @@ class LlamaCppLauncher(BackendLauncher):
         self.cache_dir = cache_dir
 
     def launch(self, config: EngineConfig, port: int) -> BackendHandle:
-        print(
-            f"  [launching llamacpp] {self.bin_path} --n-gpu-layers {config.n_gpu_layers} "
+        _log.info(
+            f"[launching llamacpp] {self.bin_path} --n-gpu-layers {config.n_gpu_layers} "
             f"--n-cpu-moe {config.n_cpu_moe} --batch-size {config.batch_size} --threads {self.threads} --port {port}"
         )
 
@@ -49,7 +52,7 @@ class LlamaCppLauncher(BackendLauncher):
             try:
                 res = httpx.get(f"http://127.0.0.1:{port}/health", timeout=2.0)
                 if res.status_code == 200:
-                    print(f"  [ready] llamacpp on port {port} came up after {elapsed}s")
+                    _log.info(f"[ready] llamacpp on port {port} came up after {elapsed}s")
                     break
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.RequestError):
                 pass
@@ -57,7 +60,7 @@ class LlamaCppLauncher(BackendLauncher):
             time.sleep(poll_interval)
             elapsed += poll_interval
             if elapsed % 20 == 0:
-                print(f"  [waiting] still loading on port {port}... ({elapsed}s elapsed)")
+                _log.info(f"[waiting] still loading on port {port}... ({elapsed}s elapsed)")
         else:
             proc.terminate()
             raise RuntimeError(

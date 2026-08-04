@@ -28,11 +28,17 @@ export const API = {
     messages: Message[], 
     onToken: (delta: any) => void, 
     onDone: () => void, 
-    onHeaders?: (h: any) => void
+    onHeaders?: (h: any) => void,
+    options?: { webSearch?: boolean }
   ) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (options?.webSearch) {
+      headers['X-Swiftlet-Web-Search'] = 'true';
+    }
+    
     const res = await fetch('/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         model: 'swiftlet',
         messages: messages.map(m => ({ role: m.role, content: m.content })),
@@ -101,5 +107,32 @@ export const API = {
       if (res.ok) return await res.json();
     } catch {}
     return null;
-  }
+  },
+
+  async exportConfig(): Promise<void> {
+    try {
+      const res = await fetch('/api/export-config');
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'swiftlet_profile.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
+  },
+
+  async importConfig(file: File): Promise<{ status: string; imported: number } | null> {
+    try {
+      const text = await file.text();
+      const res = await fetch('/api/import-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: text,
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return null;
+  },
 };

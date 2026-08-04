@@ -23,6 +23,9 @@ from dataclasses import dataclass
 
 from .classifier import classify, WorkloadSignature
 from .config_store import LearnedConfigStore, EngineConfig
+from .logging_config import get_logger
+
+_log = get_logger("orchestrator")
 
 
 @dataclass
@@ -86,7 +89,7 @@ class ServerPool:
                     return handle
                 else:
                     # Dead process! Remove it to allow a clean restart.
-                    print(f"Orchestrator: Server for {key} died unexpectedly, restarting.")
+                    _log.warning(f"Server for {key} died unexpectedly, restarting.")
                     del self._pool[key]
 
             if len(self._pool) >= self.max_size:
@@ -161,8 +164,8 @@ class Orchestrator:
         if mem.percent <= threshold:
             return
             
-        print(f"\n[Memory Engine] RAM usage at {mem.percent}% (exceeds {threshold}%).")
-        print("[Memory Engine] Erasing idle slots to free KV cache RAM...")
+        _log.info(f"[Memory Engine] RAM usage at {mem.percent}% (exceeds {threshold}%).")
+        _log.info("[Memory Engine] Erasing idle slots to free KV cache RAM...")
         
         handles = self.pool.snapshot_handles()
         freed_slots = 0
@@ -188,4 +191,4 @@ class Orchestrator:
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.RequestError):
                 continue
                 
-        print(f"[Memory Engine] Erased {freed_slots} idle slots. Cleanup complete.")
+        _log.info(f"[Memory Engine] Erased {freed_slots} idle slots. Cleanup complete.")

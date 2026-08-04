@@ -1,12 +1,26 @@
 import { useState, useEffect } from 'react';
 import { ChatPanel } from './components/ChatPanel';
 import { DashboardPanel } from './components/DashboardPanel';
+import { SettingsModal } from './components/SettingsModal';
 import { API, LearningState } from './api';
 
 function App() {
   const [, setStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [state, setState] = useState<LearningState | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState(() => localStorage.getItem('swiftlet_system_prompt') || '');
+  const [webSearchEnabled, setWebSearchEnabled] = useState(() => localStorage.getItem('swiftlet_web_search') === 'true');
   
+  const handleSystemPromptChange = (prompt: string) => {
+    setSystemPrompt(prompt);
+    localStorage.setItem('swiftlet_system_prompt', prompt);
+  };
+
+  const handleWebSearchChange = (enabled: boolean) => {
+    setWebSearchEnabled(enabled);
+    localStorage.setItem('swiftlet_web_search', String(enabled));
+  };
+
   // Dashboard state
   const [history, setHistory] = useState<Array<{ tag: string; config: string; tps: number | null }>>([]);
   const [totalReqs, setTotalReqs] = useState(0);
@@ -44,8 +58,15 @@ function App() {
 ╚══════╝ ╚══╝╚══╝ ╚═╝╚═╝        ╚═╝   ╚══════╝╚══════╝   ╚═╝`}
           </pre>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 mr-2">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              className="p-1 rounded-md hover:bg-surface-container text-on-surface-variant hover:text-primary-container transition-colors border border-transparent hover:border-outline-variant/30"
+            >
+              <span className="material-symbols-outlined text-[16px]">settings</span>
+            </button>
+            <div className="flex items-center gap-2 mr-2">
             <span className={`w-1.5 h-1.5 rounded-full ${status === 'connected' ? 'bg-primary-container' : 'bg-error'}`}></span>
             <span className={`font-label-sm text-[9px] uppercase tracking-widest ${status === 'connected' ? 'text-primary-container' : 'text-error'}`}>
               {status === 'connected' ? 'API Online' : 'Offline'}
@@ -77,6 +98,8 @@ function App() {
         <section className="flex-1 flex flex-col bg-surface-container rounded-lg border border-outline-variant overflow-hidden min-w-[320px]">
           <ChatPanel 
             onStatusChange={setStatus} 
+            systemPrompt={systemPrompt}
+            webSearchEnabled={webSearchEnabled}
             onTokensUpdate={(p, c) => setLatestTokens({ prompt: p, completion: c })}
             onNewRequest={(tag, isExplore, tps, pTokens, cTokens) => {
               setTotalReqs(prev => prev + 1);
@@ -99,6 +122,15 @@ function App() {
           />
         </section>
       </main>
+
+      <SettingsModal
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        systemPrompt={systemPrompt}
+        onSystemPromptChange={handleSystemPromptChange}
+        webSearchEnabled={webSearchEnabled}
+        onWebSearchChange={handleWebSearchChange}
+      />
     </div>
   );
 }
